@@ -1,0 +1,70 @@
+===========================================================================
+
+The need of FIRST sets in recursive descent parsing
+
+Recursive descent parsing基本上是一個「有去無回」的process，一旦detect到
+unexpected token，那就是error，不必回頭探詢「另一個(合乎文法的)可能性」。
+
+怎麼做到的？
+
+以下列的production rule為例：
+
+  function_definition_or_declarators 
+      : function_definition_without_ID
+      | rest_of_declarators
+  
+我們正在寫Function_definition_or_declarators()這個function，目前有兩條路
+可以走，一個是function_definition_without_ID，另一個是rest_of_declarators，
+問：我們該走哪一條路(該依據哪一個來展開function_definition_or_declarators)？
+
+答：那要看「如果把function_definition_without_ID展開來，有哪些token可能會是
+            其"first token"？」(令此問題的答案為A)
+          以及
+          「如果把rest_of_declarators展開來，有哪些token可能會是
+            其"first token"？」(令此問題的答案為B)
+            
+    如果current token屬於A，就依據function_definition_without_ID來展開
+    
+    如果current token屬於B，就依據rest_of_declarators來展開
+    
+    如果current token既不屬於A、也不屬於B，那就是unexpected token
+
+A是 { LP } // i.e., '('
+
+B是 { LB, COMMA, SEMI_COLON } // '[', ',', ';'
+
+// 注意：一個grammar若要能作recursive descent parsing, A與B就不能有交集
+
+=======================================================================
+
+換言之，我們對每一條"路"都要事先算出這條路的first-token-set，才能依據此
+first-token-set而決定要不要走這條路。
+
+=======================================================================
+
+最麻煩的case是如下：
+
+  A : BC | ...  // 假設有這兩條"路"可走，第一條路是BC，第二條路是...
+  
+但B展開有可能是nothing(i.e., 空的token串)
+
+此時「BC的first token set」之中就必須加入「C的first token set」
+
+如果連C展開都有可能是nothing(i.e., 空的token串)
+
+那就必須看整個文法之中有誰(e.g., D)會出現在A的後面(e.g., ...AD...)
+
+然後把那個傢伙的first token set也加入「BC的first token set」
+
+=======================================================================
+
+
+
+
+
+
+
+
+
+
+
