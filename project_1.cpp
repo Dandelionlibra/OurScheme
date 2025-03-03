@@ -3,86 +3,91 @@
 #include <vector>
 using namespace std;
 
+/*
+OurScheme 是基於 Lisp/Scheme 的一種語言
+語法以 S-Expression（S-Exp）為基礎
+由原子（Atoms）和清單（Lists）組成
+區分大小寫  apple != Apple
+支援數字、字串、符號（Symbols）、布林值等
+
+<S-exp> ::= <ATOM>
+            | Left-PAREN <S-exp> { <S-exp> } [ DOT <S-exp> ] Right-PAREN
+            | QUOTE <S-exp>
+<ATOM> ::= SYMBOL | INT | FLOAT | STRING | NIL | T | Left-PAREN Right-PAREN
+
+{} appear 0 or more
+[] appear 0 or 1
+*/
+
+/*
+! Proj1 完成步驟
+* 建立 REPL（Read-Eval-Print-Loop）
+    *while 迴圈不斷讀取輸入直到 (exit) 或 EOF。
+* 實作 ReadSExp()
+    *解析 token，構建 AST（Abstract Syntax Tree）。
+* 實作 PrintSExp()
+    *遵循 pretty-print 規則 來輸出 S-Expression。
+* 實作錯誤處理
+    *未預期的 token、括號錯誤、EOF、字串錯誤都要報錯並跳過當行。
+*/
+
 enum TokenType {
-    INT,
-    FLAOT,
-    STRING,
+    INT, // accept +&-
+    FLAOT, // .3f
+    STRING, // need use "", cannot separate by line
 
-    FUNCTION,
-    PARAMETER,
+    // FUNCTION,
+    // PARAMETER,
+    Left_PAREN, // ( begin of list
+    Right_PAREN, // ) end of list
 
-    OPEN_PAREN, // (
-    CLOSE_PAREN, // )
+    DOT, // . dot and dot pair
+    NIL, // ();false; null
+    T, // true
     QUOTE, // '
-    DOT, // .
-    NIL, // ()
-
-    SYMBOL,
-
-    BACKQUOTE,
-    COMMA,
-    COMMA_AT
+    SYMBOL // 以 identifier 表示的資料，變數名稱, a type of atom
 };
-
-// enum ExpressionType {
-//     ATOM,
-//     LIST,
-//     NIL
-// };
 
 struct Token {
     TokenType type;
     string value;
+    int line;
+    int column;
     int level; // layer, 控制輸出前空格數量，紀錄括號深度
-    Token *next;
-    Token *prev;
 };
 
+struct Node_Token {
+    Token *token;
+    Node_Token *next;
+    Node_Token *prev;
+    Node_Token() : token(nullptr), next(nullptr), prev(nullptr) {}
+};
+
+// ! 未使用
 struct Function {
     TokenType type;
     string value;
-
-    /* data */
-    Function() {
-        type = FUNCTION;
-    }
 };
-
 struct Parameter {
     TokenType type;
     string value;
-
-    /* data */
-    Parameter() {
-        type = PARAMETER;
-    }
 };
-
-
-
+// ! 未使用
 
 enum errorType {
-    UNEXPECTED_TOKEN // atom or '(' expected
-    /*
-    UNEXPECTED_EOF,
-    UNEXPECTED_CLOSE_PAREN,
-    UNEXPECTED_DOT,
-    UNEXPECTED_QUOTE,
-    UNEXPECTED_BACKQUOTE,
-    UNEXPECTED_COMMA,
-    UNEXPECTED_COMMA_AT,
-    UNEXPECTED_SYMBOL,
-    UNEXPECTED_INT,
-    UNEXPECTED_FLOAT,
-    UNEXPECTED_STRING,
-    UNEXPECTED_OPEN_PAREN,
-    UNEXPECTED_NIL,
-    UNEXPECTED_LIST,
-    UNEXPECTED_ATOM,
-    UNEXPECTED_FUNCTION,
-    UNEXPECTED_PARAMETER,
-    UNEXPECTED_EXPRESSION_TYPE
-    */
+    // ERROR (unexpected token) : atom or '(' expected when token at Line X Column Y is >>...<<
+    UNEXPECTED_TOKEN, // atom or '(' expected
+
+    // ERROR (unexpected token) : ')' expected when token at Line X Column Y is >>...<<
+    UNEXPECTED_CLOSE_PAREN, // unexpected close parenthesis error, error (1 2 . 3 4) , correct is (1 2 . (3 4))
+
+    // ERROR (no closing quote) : END-OF-LINE encountered at Line X Column Y
+    UNEXPECTED_STRING, // unexpected string error ("hello)
+
+    //ERROR (no more input) : END-OF-FILE encountered
+    UNEXPECTED_EOF, // END-OF-FILE encountered
+    
+    // UNEXPECTED_DOT // unexpected dot error (1 2 . 3 4) , correct is (1 2 . (3 4))
 };
 
 /* error message 
@@ -131,9 +136,79 @@ vector<string> tokenize(const string& input) {
     return tokens;
 }
 
+class LexicalAnalyzer {
+private:
+    Node_Token root;
+    Node_Token tail;
+
+    bool is_space(char token) {
+        if (token == ' ' || token == '\t')
+            return true;
+        return false;
+    }
+
+    bool is_enter(char token) {
+        if (token == '\n', token == '\r')
+            return true;
+        return false;
+    }
+
+    void judge_token(string tmp_string) {
+
+    }
+
+
+public:
+    LexicalAnalyzer() {
+        
+    }
+
+
+    void GetChar() {
+
+    }
+
+    void GetStr() {
+
+    }
+
+    void CutToken(string input) {
+        string tmp_string = "";
+        int size = input.size();
+        for(int i = 0, start = 0 ; i < size ; i++) {
+            Token tmp_token;
+            if (is_space(input.at(i)) || is_enter(input.at(i))) { // " "、"\n"、"\t""
+                cout << "enter space judge" << endl;
+                tmp_string = tmp_string.substr(start, i);
+                cout << "\033[1;31m" << "tmp_string: " << tmp_string << "\033[0m" << endl;
+
+                if (tmp_string != "") judge_token(tmp_string);
+                tmp_string = "" ;
+                
+
+            }
+            else {
+                tmp_string = tmp_string + input.at(i);
+
+            } 
+            cout << "input.at(i): " << input.at(i) << endl;
+
+        }
+    }
+
+    void GetToken(Token *t, string input) {
+        Token *temp = t;
+
+    }
+
+
+    ~LexicalAnalyzer() {
+
+    }
+};
+
 /*
  in order to parse the input, build a parser tree
-
 */
 class Parser_Tree {
 private:
@@ -151,206 +226,87 @@ public:
             root = t;
         } else {
             Token *temp = root;
-            while (temp->next != nullptr) {
-                temp = temp->next;
-            }
-            temp->next = t;
-            t->prev = temp;
+
         }
     }
     void print() {
         Token *temp = root;
-        while (temp != nullptr) {
-            cout << temp->value << endl;
-            temp = temp->next;
-        }
+
     }
 
 };
+
+
 
 /*
  recursive descent parser
  遞迴分解 parser
  
 */
-void cut_token(Token *t, string input) {
-    Token *temp = t;
-    while (temp != nullptr) {
-        cout << temp->value << endl;
-        temp = temp->next;
-    }
-}
+
 
 bool is_eof(string& input) {
     if (!getline(cin, input)) {
-        cerr << "ERROR (no more input) : END-OF-FILE encountered" << endl;
+        // cerr << "ERROR (no more input) : END-OF-FILE encountered" << endl;
         return true; // end of file
     }
     return false; 
 }
 
 int main() {
-    cout << "Welcome to OurScheme!" << endl << endl;
-    cout << "> ";
-    
+    LexicalAnalyzer Lexical; //詞法分析器
+    bool is_Syntax_legal = true;
+    // SyntaxAnalyzer Syntax; //語法分析器
+
+    bool is_EOF = false;
     string expr, input;
     int line, column = 0;
-    Token *head = nullptr;
-    Token *tail = nullptr;
+    Node_Token *head = nullptr;
+    Node_Token *tail = nullptr;
 
-    while (true) {
-        /*
-        if (!getline(cin, input)) {
-            cerr << "ERROR (no more input) : END-OF-FILE encountered" << endl;
-            break;
-        }
-        */
-        if (is_eof(input))
-           break;
-        cout << "\033[1;33m" << "line:" << input << "\033[0m" << endl;
-        
-        
-        for (char c : input) {
-            cut
-            if (c == '(') {
-                Token *t = new Token;
-                t->type = OPEN_PAREN;
-                t->value = "(";
-                t->level = 0;
-                t->next = nullptr;
-                t->prev = nullptr;
-                if (head == nullptr) {
-                    head = t;
-                    tail = t;
-                } else {
-                    tail->next = t;
-                    t->prev = tail;
-                    tail = t;
-                }
-            } else if (c == ')') {
-                Token *t = new Token;
-                t->type = CLOSE_PAREN;
-                t->value = ")";
-                t->level = 0;
-                t->next = nullptr;
-                t->prev = nullptr;
-                if (head == nullptr) {
-                    head = t;
-                    tail = t;
-                } else {
-                    tail->next = t;
-                    t->prev = tail;
-                    tail = t;
-                }
-            } else if (c == '.') {
-                Token *t = new Token;
-                t->type = DOT;
-                t->value = ".";
-                t->level = 0;
-                t->next = nullptr;
-                t->prev = nullptr;
-                if (head == nullptr) {
-                    head = t;
-                    tail = t;
-                } else {
-                    tail->next = t;
-                    t->prev = tail;
-                    tail = t;
-                }
-            } else if (c == '\'') {
-                Token *t = new Token;
-                t->type = QUOTE;
-                t->value = "'";
-                t->level = 0;
-                t->next = nullptr;
-                t->prev = nullptr;
-                if (head == nullptr) {
-                    head = t;
-                    tail = t;
-                } else {
-                    tail->next = t;
-                    t->prev = tail;
-                    tail = t;
-                }
-            } else if (c == '`') {
-                Token *t = new Token;
-                t->type = BACKQUOTE;
-                t->value = "`";
-                t->level = 0;
-                t->next = nullptr;
-                t->prev = nullptr;
-                if (head == nullptr) {
-                    head = t;
-                    tail = t;
-                } else {
-                    tail->next = t;
-                    t->prev = tail;
-                    tail = t;
-                }
-            } else if (c == ',') {
-                Token *t = new Token;
-                t->type = COMMA;
-                t->value = ",";
-                t->level = 0;
-                t->next = nullptr;
-                t->prev = nullptr;
-                if (head == nullptr) {
-                    head = t;
-                    tail = t;
-                } else {
-                    tail->next = t;
-                    t->prev = tail;
-                    tail = t;
-                }
-            } else if (c == '@') {
-                Token *t = new Token;
-                t->type = COMMA_AT;
-                t->value = "@";
-                t->level = 0;
-                t->next = nullptr;
-                t->prev = nullptr;
-                if (head == nullptr) {
-                    head = t;
-                    tail = t;
-                } else {
-                    tail->next = t;
-                    t->prev = tail;
-                    tail = t;
-                }
-            } else if (c == ' ') {
-                continue;
-            } else {
-                Token *t = new Token;
-                t->type = SYMBOL;
-                t->value = c;
-                t->level = 0;
-                t->next = nullptr;
-                t->prev = nullptr;
-                if (head == nullptr) {
-                    head = t;
-                    tail = t;
-                } else {
-                    tail->next = t;
-                    t->prev = tail;
-                    tail = t;
-                }
-            }
-
-        cut_token(head);
-
-        /*expr += input + "\n";
-        if (expr.find("(exit)") != string::npos)
-            break;
-        if (isBalanced(expr) && !expr.empty()) {
-            auto tokens = tokenize(expr);
-            for (auto& t : tokens) {
-                cout << t << endl;
-            }
-            expr.clear();
+    cout << "Welcome to OurScheme!" << endl << endl;
+    while (!is_EOF) { // while (true)
+        try {
             cout << "> ";
-        }*/
+            if (is_eof(input)) { // ReadSExp
+                is_EOF = true;
+                throw error{UNEXPECTED_EOF};
+                // cout << "ERROR (no more input) : END-OF-FILE encountered" << endl;
+                // continue;
+                break;
+            }
+            cout << "\033[1;33m" << "input:" << input << "\033[0m" << endl;
+
+            if (input == "(exit)") {
+                break;
+            }
+
+            Lexical.CutToken(input);
+
+
+        } catch (error e) {
+            switch (e.type) {
+                case UNEXPECTED_TOKEN:
+                    cout << "ERROR (unexpected token) : " << e.message << " when token at Line " << e.line << " Column " << e.column << " is >>" << e.expected << "<< " << endl;
+                    break;
+                case UNEXPECTED_CLOSE_PAREN:
+                    cout << "ERROR (unexpected token) : " << e.message << " when token at Line " << e.line << " Column " << e.column << " is >>" << e.expected << "<< " << endl;
+                    break;
+                case UNEXPECTED_STRING:
+                    cout << "ERROR (no closing quote) : " << e.message << " at Line " << e.line << " Column " << e.column << endl;
+                    break;
+                case UNEXPECTED_EOF:
+                    cout << "ERROR (no more input) : END-OF-FILE encountered" << endl;
+                    break;
+                default:
+                    break;
+            }
+        }
+        
     }
-    
+        
+        
+
     cout << endl << "Thanks for using OurScheme!" << endl;
     return 0;
 }
