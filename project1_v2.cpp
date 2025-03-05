@@ -98,6 +98,56 @@ struct error {
     string expected;
 };
 
+
+class LexicalAnalyzer {
+private:
+
+
+public:
+    LexicalAnalyzer() {
+
+    }
+
+
+    ~LexicalAnalyzer() {
+
+    }
+
+
+};
+
+/*
+ in order to parse the input, build a parser tree
+*/
+class Parser_Tree {
+private:
+    Token *root;
+
+public:
+    Parser_Tree() {
+        root = nullptr;
+    }
+    ~Parser_Tree() {
+        delete root;
+    }
+    void insert(Token *t) {
+        if (root == nullptr) {
+            root = t;
+        } else {
+            Token *temp = root;
+
+        }
+    }
+    void print() {
+        Token *temp = root;
+
+    }
+
+};
+    
+    
+
+
 class LexicalAnalyzer {
 private:
     Node_Token root;
@@ -121,6 +171,14 @@ private:
             return true;
         return false;
     }
+
+    void whitespace(int num) {
+        for (int i = 0; i < num; i++) {
+            cout << " ";
+        }
+    }
+
+
 
     void set_EOF(bool parameter) {
         is_EOF = parameter;
@@ -269,35 +327,6 @@ public:
     }
 };
 
-/*
- in order to parse the input, build a parser tree
-*/
-class Parser_Tree {
-private:
-    Token *root;
-
-public:
-    Parser_Tree() {
-        root = nullptr;
-    }
-    ~Parser_Tree() {
-        delete root;
-    }
-    void insert(Token *t) {
-        if (root == nullptr) {
-            root = t;
-        } else {
-            Token *temp = root;
-
-        }
-    }
-    void print() {
-        Token *temp = root;
-
-    }
-
-};
-
 
 
 /*
@@ -318,7 +347,7 @@ public:
 int main() {
     LexicalAnalyzer Lexical; //詞法分析器
     bool is_Syntax_legal = true;
-    // SyntaxAnalyzer Syntax; //語法分析器
+    SyntaxAnalyzer Syntax; //語法分析器
 
     // bool is_EOF = false;
     string expr, input;
