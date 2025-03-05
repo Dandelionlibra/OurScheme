@@ -138,8 +138,13 @@ vector<string> tokenize(const string& input) {
 
 class LexicalAnalyzer {
 private:
+
     Node_Token root;
     Node_Token tail;
+    int g_line = 1, g_column = 0;
+    int leftCount = 0, rightCount = 0;
+    bool is_EOF;
+    string Str;
 
     bool is_space(char token) {
         if (token == ' ' || token == '\t')
@@ -157,19 +162,87 @@ private:
 
     }
 
-
-public:
-    LexicalAnalyzer() {
-        
+    void set_EOF(bool parameter) {
+        is_EOF = parameter;
     }
 
 
-    void GetChar() {
+public:
+    LexicalAnalyzer() : is_EOF(false), Str("") {
+        root.token = nullptr;
+        tail.token = nullptr;
+    }
 
+    char GetChar() {
+        char c;
+        if (cin.get(c)) {
+            g_column++;
+            if (is_enter(c)) {
+                g_line++;
+                g_column = 0;
+            }
+            else if (is_space(c)) {
+                cout << "\033[1;33m" << "meet space" << "\033[0m" << endl;
+            }
+            cout << "Read char: " << c << " (line " << g_line << ", col " << g_column << ")" << endl;
+            return c;
+        }
+        else {
+            set_EOF(true);
+        }
+        return '\0';
     }
 
     void GetStr() {
+        string tokenBuffer;
+        while (!Get_is_EOF() || leftCount != rightCount) {
+            char c = GetChar();
+            //! if (c == '\0') break;
 
+            if (is_space(c) || is_enter(c)) {
+                if (!tokenBuffer.empty()) {
+                    if (!root.token) {
+                        root.token = new Token();
+                        root.token->value = tokenBuffer;
+                        tail = root;
+                    } else {
+                        Node_Token* newNode = new Node_Token();
+                        newNode->token = new Token();
+                        newNode->token->value = tokenBuffer;
+                        newNode->prev = &tail;
+                        tail.next = newNode;
+                        tail = *newNode;
+                    }
+                    Str.append(tokenBuffer);
+                    tokenBuffer.clear();
+                }
+            }
+            else
+                tokenBuffer.push_back(c);
+            
+            /*
+            if (c == '(') leftCount++;
+            else if (c == ')') rightCount++;
+
+            if (leftCount == rightCount && leftCount != 0) {
+                if (!tokenBuffer.empty()) {
+                    if (!root.token) {
+                        root.token = new Token();
+                        root.token->value = tokenBuffer;
+                        tail = root;
+                    } else {
+                        Node_Token* newNode = new Node_Token();
+                        newNode->token = new Token();
+                        newNode->token->value = tokenBuffer;
+                        newNode->prev = &tail;
+                        tail.next = newNode;
+                        tail = *newNode;
+                    }
+                    tokenBuffer.clear();
+                }
+                break;
+            }*/
+        }
     }
 
     void CutToken(string input) {
@@ -199,6 +272,10 @@ public:
     void GetToken(Token *t, string input) {
         Token *temp = t;
 
+    }
+
+    bool Get_is_EOF(){
+        return is_EOF;
     }
 
 
@@ -245,43 +322,46 @@ public:
 */
 
 
-bool is_eof(string& input) {
-    if (!getline(cin, input)) {
-        // cerr << "ERROR (no more input) : END-OF-FILE encountered" << endl;
-        return true; // end of file
-    }
-    return false; 
-}
+// bool is_eof(string& input) {
+//     if (!getline(cin, input)) {
+//         // cerr << "ERROR (no more input) : END-OF-FILE encountered" << endl;
+//         return true; // end of file
+//     }
+//     return false; 
+// }
 
 int main() {
     LexicalAnalyzer Lexical; //詞法分析器
     bool is_Syntax_legal = true;
     // SyntaxAnalyzer Syntax; //語法分析器
 
-    bool is_EOF = false;
+    // bool is_EOF = false;
     string expr, input;
     int line, column = 0;
     Node_Token *head = nullptr;
     Node_Token *tail = nullptr;
 
     cout << "Welcome to OurScheme!" << endl << endl;
-    while (!is_EOF) { // while (true)
+    while (!Lexical.Get_is_EOF()) { // while (true)
         try {
             cout << "> ";
-            if (is_eof(input)) { // ReadSExp
-                is_EOF = true;
+            Lexical.GetStr();
+            if (Lexical.Get_is_EOF()) { // ReadSExp
+                // is_EOF = true;
                 throw error{UNEXPECTED_EOF};
                 // cout << "ERROR (no more input) : END-OF-FILE encountered" << endl;
                 // continue;
                 break;
             }
             cout << "\033[1;33m" << "input:" << input << "\033[0m" << endl;
+            
 
             if (input == "(exit)") {
                 break;
             }
 
-            Lexical.CutToken(input);
+            // Lexical.CutToken(input);
+
 
 
         } catch (error e) {
