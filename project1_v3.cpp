@@ -63,10 +63,10 @@ struct Token {
 };
 
 struct Node_Token {
-    Token *token;
-    Node_Token *next;
-    Node_Token *prev;
-    Node_Token() : token(nullptr), next(nullptr), prev(nullptr) {}
+    Token token;
+    Node_Token *left;
+    Node_Token *right;
+    Node_Token() : left(nullptr), right(nullptr) {}
 };
 
 enum errorType {
@@ -93,9 +93,40 @@ enum errorType {
 struct error {
     errorType type;
     string message;
+
+    string expected;
+    string current;    
     int line;
     int column;
-    string expected;
+
+    error() : type(Error_None), message(""), line(0), column(0), expected(""), current("") {}
+    error(errorType t, string e_token, string c_token, int l, int c) {
+        type = t;
+        expected = e_token;
+        current = c_token;
+        line = l;
+        column = c;
+
+        // cout << "error type: " << t << " expected: " << e_token << " current: " << c_token << " line: " << l << " column: " << c << endl;
+
+        if (t == UNEXPECTED_TOKEN)
+            message = "UNEXPECTED_TOKEN ";
+
+        else if (t == UNEXPECTED_CLOSE_PAREN) {
+            message = "2. ERROR (unexpected token) : " + e_token + " expected when token at Line " + to_string(line) + " Column " + to_string(column) + " is >>" + c_token + "<<";
+
+        }
+        else if (t == UNEXPECTED_STRING)
+            message = "ERROR (no closing quote) : END-OF-LINE encountered at Line " + to_string(line) + " Column " + to_string(column);
+        
+        else if (t == UNEXPECTED_EOF)
+            message = "ERROR (no more input) : END-OF-FILE encountered";
+        
+        else if (t == UNEXPECTED_EXIT)
+            message = "exit";
+        
+
+    }
 };
 
 
@@ -146,18 +177,16 @@ public:
 };
     
 
-
 class LexicalAnalyzer {
 private:
-    Node_Token root;
-    Node_Token tail;
     vector<Token> tokenBuffer; // 暫存read data，去掉" "、"\n"、"\t"、""、    ?"\r"
     int g_line = 1, g_column = 1; // '(" ", "\t"， "\")保留
     int leftCount = 0, rightCount = 0; // count '(' and ')'
     bool is_EOF;
     // bool is_call_function;
     // bool is_quote;
-    string Str;
+    int error_line, error_column;
+    string ExpectedToken, CurrentToken;
 
     bool is_space(char token) { // check whether the token is ' ' or '\t'
         if (token == ' ' || token == '\t')
@@ -198,36 +227,21 @@ private:
 
     TokenType check_token_type(string str) {
         TokenType type;
-        if (str == "NIL") {
+        if (str == "NIL")
             type = NIL;
-        }
-        else if (str == "T") {
+        else if (str == "T")
             type = T;
-        }
-        else if (str == "'" || str == "QUOTE") {
+        else if (str == "'" || str == "QUOTE")
             type = QUOTE;
-        }
-        else if (str == "(") {
+        else if (str == "(") 
             type = Left_PAREN;
-        }
-        else if (str == ")") {
+        else if (str == ")") 
             type = Right_PAREN;
-        }
-        else if (str == ".") {
+        else if (str == ".") 
             type = DOT;
-        }
-        // else if (str[0] == '\"' && str[str.size()-1] == '\"') {
-        //     type = STRING;
-        // }
-        // else if (str[0] == '+' || str[0] == '-' || isdigit(str[0])) {
-        //     type = INT;
-        // }
-        // else if (str[0] == '+' || str[0] == '-' || isdigit(str[0]) || str[0] == '.') {
-        //     // type = FLOAT;
-        // }
-        else {
+        else
             type = SYMBOL;
-        }
+        
         return type;
     }
 
@@ -238,8 +252,11 @@ private:
         tmptoken.type = check_token_type(tmptoken.value);
         tmptoken.line = g_line;
         tmptoken.column = g_column;
+        tmptoken.level = leftCount - rightCount;
+        if (tmptoken.value == ")")
+            tmptoken.level++;
 
-        cout << "tmptoken.value: " << tmptoken.value << " tmptoken.type: " << tmptoken.type << " tmptoken.line: " << tmptoken.line << " tmptoken.column: " << tmptoken.column << endl;
+        cout << "tmptoken.value: " << tmptoken.value << " tmptoken.type: " << tmptoken.type << " tmptoken.line: " << tmptoken.line << " tmptoken.column: " << tmptoken.column << " level:" << tmptoken.level << endl;
         str = ""; // reset by ""
 
         return tmptoken;
@@ -313,37 +330,36 @@ private:
         }
     }
 
-    void print_vector(vector<Token> &v) {
-        cout << "\033[1;34menter print_vector\033[0m" << endl;
-        for (int i = 0; i < v.size(); i++) {
-            cout << v[i].value << " ";
-            cout << "line: " << v[i].line << " ";
-            cout << "column: " << v[i].column << " ";
-            cout << endl;
-        }
-        cout << endl;
-    }
-
     void print_token(Token &t) {
         cout << "Token: " << t.value << " ";
         cout << "line: " << t.line << " ";
         cout << "column: " << t.column << " ";
+        cout << "level: " << t.level << " ";
         cout << endl;
     }
-    
-    // void set_Line_And_Column(Token &tmpstr) {
-    //     tmpstr.line = g_line;
-    //     tmpstr.column = g_column;
-    // }
+    void print_vector(vector<Token> &v) {
+        cout << "\033[1;34menter print_vector\033[0m" << endl;
+        for (int i = 0; i < v.size(); i++)
+            print_token(v[i]);
+    }
+
 
     void reset_Line_And_Column(int l, int c) {
         g_line = l;
         g_column = c;
+        cout << "reset line: " << g_line << " column: " << g_column << endl;
     }
 
-    // void reset_string(string &data) {
-    //     data = "";
-    // }
+    void reset_error_info() {
+        g_line = 1;
+        g_column = 1;
+
+        error_line = 0;
+        error_column = 0;
+        ExpectedToken = "";
+        CurrentToken = "";
+    }
+
     void reset(Token &data) {
         
     }
@@ -352,32 +368,87 @@ private:
         is_EOF = parameter;
     }
 
-public:
-    LexicalAnalyzer() : is_EOF(false), Str("") {//, is_call_function(false)
-        root.token = nullptr;
-        tail.token = nullptr;
+    // void set_CurrentToken(string &Token) {
+    //     CurrentToken = Token;
+    // }
+
+    void set_ErrorToken(errorType &error, Token &T) {
+        // string expected = "";
+        // set_CurrentToken(Token);
+        CurrentToken = T.value;
+        error_line = T.line;
+        error_column = T.column;
+
+        // debug error type
+        switch (error) {
+            case UNEXPECTED_TOKEN:
+            cout << "\033[1;35merror: UNEXPECTED_TOKEN\033[0m" << endl;
+            break;
+            case UNEXPECTED_CLOSE_PAREN:
+            cout << "\033[1;35merror: UNEXPECTED_CLOSE_PAREN\033[0m" << endl;
+            break;
+            case UNEXPECTED_STRING:
+            cout << "\033[1;35merror: UNEXPECTED_STRING\033[0m" << endl;
+            break;
+            case UNEXPECTED_EOF:
+            cout << "\033[1;35merror: UNEXPECTED_EOF\033[0m" << endl;
+            break;
+            case UNEXPECTED_EXIT:
+            cout << "\033[1;35merror: UNEXPECTED_EXIT\033[0m" << endl;
+            break;
+            default:
+            cout << "\033[1;35merror: UNKNOWN_ERROR\033[0m" << endl;
+            break;
+        }
+        
+        if (error == UNEXPECTED_EOF)
+            return;
+        else if (error == UNEXPECTED_TOKEN) {
+            // if (CurrentToken == ")") {
+                ExpectedToken = "unset!";
+            // }
+        }
+        else if (error == UNEXPECTED_CLOSE_PAREN) {
+            // cout << "\033[1;35merror == UNEXPECTED_CLOSE_PAREN\033[0m" << endl;
+            ExpectedToken = "atom or '('";
+            // cout << "\033[1;35mExpectedToken: " << ExpectedToken << "\033[0m" << endl;
+            
+        }
+        else if (error == UNEXPECTED_STRING) {
+            ExpectedToken = "unset!";
+        }
+        
     }
 
-    void get_full_string(string &input) {
-        Str = input;
-    }
+
+
+
+public:
+    LexicalAnalyzer() : is_EOF(false), ExpectedToken(""), CurrentToken("") {}
 
     void GetStr(bool &finish_input, errorType &error) {
         Token tmptoken;
-        string tmpstr;
+        string tmpstr = "";
         char c_peek = '\0';
-        tmpstr = "";
-        // reset_string(tmpstr); // init by ""
         
-        while(!finish_input && error == Error_None) {
+        reset_error_info();
+        while(!finish_input) {
             c_peek = cin.peek();
 
             if (c_peek == EOF) { // read EOF
                 error = UNEXPECTED_EOF;
                 set_EOF(true);
             }
-            if (error != Error_None)
+            if (error != Error_None){
+                set_ErrorToken(error, tokenBuffer.at(tokenBuffer.size() - 1));
+
+                reset_Line_And_Column(tokenBuffer.at(tokenBuffer.size() - 1).line, tokenBuffer.at(tokenBuffer.size() - 1).column);
+                
                 return;
+            }
+            else if (leftCount != 0 && leftCount == rightCount) { //leftCount != 0 && 
+                reset_Line_And_Column(1, 1);
+            }
 
 
             if (is_PAREN(c_peek)) { //c_peek == '(' || c_peek == ')'
@@ -387,10 +458,15 @@ public:
                 tokenBuffer.push_back(token_info(tmpstr));
                 g_column++;
 
-                if (leftCount <= rightCount) {
-                    error = UNEXPECTED_CLOSE_PAREN;
-                    return;
+                if (leftCount == rightCount || leftCount < rightCount) {
+                    if (leftCount < rightCount) {
+                        error = UNEXPECTED_CLOSE_PAREN;
+                        // return;
+                    }
+                    leftCount = 0;
+                    rightCount = 0;
                 }
+                
             }
             else if (c_peek == '\"') { // need read total line until meet another ", but not include '\n'
                                        // if meet '\n' before another ", rise -> ERROR (no closing quote) : END-OF-LINE encountered at Line 1 Column 7
@@ -404,7 +480,7 @@ public:
                 read_whole_string(c_peek, '\"', error); // in this func will set new c_peek
                 // ! 預計離開 read_whole_string 後，若沒因 error 而 return，下個 c_peek 一定是 "
                 if (error != Error_None)
-                    return;
+                    continue;
                 else if (c_peek == '\"') {
                     tmpstr.push_back(getchar()); // push_back "
                     tokenBuffer.push_back(token_info(tmpstr));
@@ -422,19 +498,23 @@ public:
                 // c_peek = cin.peek(); //
             }
             else if (is_enter(c_peek)) { //c_peek == '\n'
-                // set_Line_And_Column(tmpstr);
+                
                 cout << "\033[1;33m" << "Read enter!" << "\033[0m" << endl;
-                cout << "peek: " << c_peek << endl;
+                cout << "\033[1;32mline: " << g_line << " column: " << g_column << "\033[0m" << endl;
+
 
                 getchar(); // ignore '\n'
+                
+                print_vector(tokenBuffer);
+                
                 g_line++;
                 g_column = 1;
-                print_vector(tokenBuffer);
-
                 if (leftCount == 0 && rightCount == 0) {
-                    // finish_input = true;
-                    reset_Line_And_Column(1, 1);
+                    g_line = 1;
                 }
+
+
+                cout << "\033[1;32mline: " << g_line << " column: " << g_column << "\033[0m" << endl;
 
             }
             else if (is_space(c_peek)) { //c_peek == ' ' || c_peek == '\t') { // 有 " 時，不進入 && count_str_quote % 2 == 0
@@ -455,20 +535,13 @@ public:
                 
                 // reset_Line_And_Column(g_line, 1);
             }
-            else {
+            else 
                 read_whole_string(c_peek, ' ', error);
-            }
-
-            if (leftCount != 0 && leftCount == rightCount) {
-                // finish_input = true;
-                reset_Line_And_Column(1, 1);
-
-            }
             
-            
+            cout << "\033[1;32mline: " << g_line << " column: " << g_column << "\033[0m" << endl;
+            cout << "\033[1;32mleftCount: " << leftCount << " rightCount: " << rightCount << "\033[0m" << endl;
         }
 
-        // is_call_function = false;
     }
 
     bool Get_is_EOF(){
@@ -482,6 +555,17 @@ public:
     int getCurrentColumn() {
         return g_column;
     }
+
+    string getExpectedToken() {
+        // cout << "ExpectedToken: " << ExpectedToken << endl;
+        return ExpectedToken;
+    }
+
+    string getCurrentToken() {
+        return CurrentToken;
+    }
+
+
     ~LexicalAnalyzer() {
 
     }
@@ -507,40 +591,42 @@ int main() {
         try {
             cout << "> ";
             // while(!finish_input && !Lexical.Get_is_EOF()) {
-                errorType E = Error_None;
-                Lexical.GetStr(finish_input, E);
+            errorType E = Error_None;
+            Lexical.GetStr(finish_input, E);
 
-                if (E != Error_None) {
-                    throw error {
-                        E,
-                        "",
-                        Lexical.getCurrentLine(),
-                        Lexical.getCurrentColumn(),
-                        ""
-                    };
-                    break;
-                }
-            // }
-
-            if (E == UNEXPECTED_EXIT) {
+            if (E != Error_None) {
+                throw error {
+                    E,
+                    Lexical.getExpectedToken(), // return expected token, type string
+                    Lexical.getCurrentToken(), // return current token, type string                        
+                    Lexical.getCurrentLine(),
+                    Lexical.getCurrentColumn()
+                };
                 break;
             }
+            else if (finish_input) {
+                // bulid parser tree
+                
+            }
+            // }
 
             // Lexical.CutToken(input);
 
         } catch (error e) {
             switch (e.type) {
                 case UNEXPECTED_TOKEN:
+                    cout << "\033[1;31m" << "UNEXPECTED_TOKEN" << "\033[0m" << endl;
                     cout << "\033[1;31m" << "ERROR (unexpected token) : " << e.message << " when token at Line " << e.line << " Column " << e.column << " is >>" << e.expected << "<< " << "\033[0m" << endl;
                     break;
                 case UNEXPECTED_CLOSE_PAREN:
-                    cout << "\033[1;31m" << "ERROR (unexpected token) : " << e.message << " when token at Line " << e.line << " Column " << e.column << " is >>" << e.expected << "<< " << "\033[0m" << endl;
+                    cout << "\033[1;31m" << "UNEXPECTED_CLOSE_PAREN" << "\033[0m" << endl;
+                    cout << "\033[1;31m" << e.message << "\033[0m" << endl;
                     break;
                 case UNEXPECTED_STRING:
-                    cout << "\033[1;31m" << "ERROR (no closing quote) : " << "END-OF-LINE encountered" << " at Line " << e.line << " Column " << e.column << "\033[0m" << endl;
+                    cout << "\033[1;31m" << e.message << "\033[0m" << endl;
                     break;
                 case UNEXPECTED_EOF:
-                    cout << "\033[1;31m" << "ERROR (no more input) : END-OF-FILE encountered" << "\033[0m" << endl;
+                    cout << "\033[1;31m" << e.message << "\033[0m" << endl;
                     break;
                 case UNEXPECTED_EXIT:
                     break;
