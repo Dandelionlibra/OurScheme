@@ -113,11 +113,11 @@ struct error {
             message = "UNEXPECTED_TOKEN ";
 
         else if (t == UNEXPECTED_CLOSE_PAREN) {
-            message = "2. ERROR (unexpected token) : " + e_token + " expected when token at Line " + to_string(line) + " Column " + to_string(column) + " is >>" + c_token + "<<";
+            message = "ERROR (unexpected token) : " + e_token + " expected when token at Line " + to_string(line) + " Column " + to_string(column) + " is >>" + c_token + "<<";
 
         }
         else if (t == UNEXPECTED_STRING)
-            message = "ERROR (no closing quote) : END-OF-LINE encountered at Line " + to_string(line) + " Column " + to_string(column);
+            message = "ERROR (no closing quote) : END-OF-LINE encountered at Line " + to_string(line) + " Column " + to_string(column+1);
         
         else if (t == UNEXPECTED_EOF)
             message = "ERROR (no more input) : END-OF-FILE encountered";
@@ -265,8 +265,8 @@ private:
     void read_whole_string(char &c_peek, char end_char, errorType &error) {
         
         string tmpstr;
-        int begin_line = g_line;
-        int begin_column = g_column;
+        // int begin_line = g_line;
+        // int begin_column = g_column;
 
         if (end_char == '\"') {
             cout << "1. enter read_whole_string" << endl;
@@ -275,7 +275,10 @@ private:
                 
                 if (c_peek == '\n') {
                     error = UNEXPECTED_STRING;
-                    getchar(); // ignore '\n'
+                    g_column--;
+                    tokenBuffer.push_back(token_info(tmpstr)); // push_back string
+                    // char t = getchar(); // ignore '\n'
+
                     return;
                 }
                 else if (c_peek == EOF) {
@@ -315,13 +318,13 @@ private:
         }
 
         // return tmpstr;
-        int t_line = g_line;
-        int t_column = g_column;
-        g_line = begin_line;
-        g_column = begin_column;
+        // int t_line = g_line;
+        // int t_column = g_column;
+        // g_line = begin_line;
+        // g_column = begin_column;
         tokenBuffer.push_back(token_info(tmpstr)); // push_back string
-        g_line = t_line;
-        g_column = t_column;
+        // g_line = t_line;
+        // g_column = t_column;
     }
 
     void print_whitespace(int num) {
@@ -331,7 +334,13 @@ private:
     }
 
     void print_token(Token &t) {
-        cout << "Token: " << t.value << " ";
+        for(auto &c : t.value) {
+            if (c == ' ')
+                cout << "nul ";
+            else
+                cout << c;
+        }
+
         cout << "line: " << t.line << " ";
         cout << "column: " << t.column << " ";
         cout << "level: " << t.level << " ";
@@ -353,6 +362,8 @@ private:
     void reset_error_info() {
         g_line = 1;
         g_column = 1;
+        leftCount = 0;
+        rightCount = 0;
 
         error_line = 0;
         error_column = 0;
@@ -441,13 +452,9 @@ public:
             }
             if (error != Error_None){
                 set_ErrorToken(error, tokenBuffer.at(tokenBuffer.size() - 1));
-
                 reset_Line_And_Column(tokenBuffer.at(tokenBuffer.size() - 1).line, tokenBuffer.at(tokenBuffer.size() - 1).column);
                 
                 return;
-            }
-            else if (leftCount != 0 && leftCount == rightCount) { //leftCount != 0 && 
-                reset_Line_And_Column(1, 1);
             }
 
 
@@ -458,20 +465,20 @@ public:
                 tokenBuffer.push_back(token_info(tmpstr));
                 g_column++;
 
-                if (leftCount == rightCount || leftCount < rightCount) {
-                    if (leftCount < rightCount) {
-                        error = UNEXPECTED_CLOSE_PAREN;
-                        // return;
-                    }
+                if (leftCount < rightCount) 
+                    error = UNEXPECTED_CLOSE_PAREN;
+
+                else if (leftCount != 0 && (leftCount == rightCount)) {
                     leftCount = 0;
                     rightCount = 0;
+                    reset_Line_And_Column(1, 1);
                 }
                 
             }
             else if (c_peek == '\"') { // need read total line until meet another ", but not include '\n'
                                        // if meet '\n' before another ", rise -> ERROR (no closing quote) : END-OF-LINE encountered at Line 1 Column 7
                                        // ! (no closing quote)
-                cout << "\033[1;33m" << "Read " << c_peek << ", add to vector." << "\033[0m" << endl;
+                cout << "\033[1;33m" << "Read " << c_peek << " add to vector." << "\033[0m" << endl;
                 tmpstr.push_back(getchar());
                 tokenBuffer.push_back(token_info(tmpstr));
                 g_column++;
@@ -479,9 +486,11 @@ public:
                 // read total line
                 read_whole_string(c_peek, '\"', error); // in this func will set new c_peek
                 // ! 預計離開 read_whole_string 後，若沒因 error 而 return，下個 c_peek 一定是 "
-                if (error != Error_None)
+                if (error != Error_None){
+                    cout << "error != Error_None" << endl;
                     continue;
-                else if (c_peek == '\"') {
+                }
+                if (c_peek == '\"') {
                     tmpstr.push_back(getchar()); // push_back "
                     tokenBuffer.push_back(token_info(tmpstr));
                     tmpstr = "";
@@ -502,17 +511,18 @@ public:
                 cout << "\033[1;33m" << "Read enter!" << "\033[0m" << endl;
                 cout << "\033[1;32mline: " << g_line << " column: " << g_column << "\033[0m" << endl;
 
-
                 getchar(); // ignore '\n'
                 
-                print_vector(tokenBuffer);
-                
-                g_line++;
-                g_column = 1;
-                if (leftCount == 0 && rightCount == 0) {
-                    g_line = 1;
-                }
 
+                if (leftCount == 0 && rightCount == 0) {
+                    print_vector(tokenBuffer);
+                    reset_Line_And_Column(1, 1);
+                    // build parser tree
+                }
+                else {
+                    g_line++;
+                    g_column = 1;
+                }
 
                 cout << "\033[1;32mline: " << g_line << " column: " << g_column << "\033[0m" << endl;
 
