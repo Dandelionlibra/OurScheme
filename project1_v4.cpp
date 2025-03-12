@@ -130,7 +130,7 @@ struct error {
 */
 class Parser_Tree {
     private:
-        SyntaxAnalyzer syntax;
+        // SyntaxAnalyzer syntax;
 
         Token *root;
 
@@ -496,7 +496,7 @@ private:
         error_column = 0;
         ExpectedToken = "";
         CurrentToken = "";
-        is_EOF = false;
+        // is_EOF = false;
     }
 
 
@@ -667,14 +667,13 @@ public:
             }
             else if (is_sep(c_peek)) { // c_peek == ';'
                 cout << "\033[1;33m" << "; Read sep!" << "\033[0m" << endl;
-                // cout << "peek: " << c_peek << endl;
+                // cout << "ignore peek: " << c_peek << endl;
                 
                 while (c_peek != '\n' && c_peek != EOF) {
                     getchar(); // ignore characters until '\n' or EOF
                     c_peek = cin.peek();
                 }
                 
-                // reset_Line_And_Column(g_line, 1);
             }
             else if (!finish_input) // 不結束
                 read_whole_string(c_peek, ' ', error, finish_input);
@@ -761,18 +760,23 @@ int main() {
                 case UNEXPECTED_TOKEN:
                     cout << "\033[1;31m" << "UNEXPECTED_TOKEN" << "\033[0m" << endl;
                     cout << "\033[1;31m" << "ERROR (unexpected token) : " << e.message << " when token at Line " << e.line << " Column " << e.column << " is >>" << e.expected << "<< " << "\033[0m" << endl;
+                    Lexical.reset();
                     break;
                 case UNEXPECTED_CLOSE_PAREN:
                     cout << "\033[1;31m" << "UNEXPECTED_CLOSE_PAREN" << "\033[0m" << endl;
                     cout << "\033[1;31m" << e.message << "\033[0m" << endl;
+                    Lexical.reset();
                     break;
                 case UNEXPECTED_STRING:
                     cout << "\033[1;31m" << e.message << "\033[0m" << endl;
+                    Lexical.reset();
                     break;
                 case UNEXPECTED_EOF:
                     cout << "\033[1;31m" << e.message << "\033[0m" << endl;
+                    Lexical.reset();
                     break;
                 case UNEXPECTED_EXIT:
+                    Lexical.reset();
                     break;
                 default:
                     break;

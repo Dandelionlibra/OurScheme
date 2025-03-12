@@ -128,45 +128,109 @@ struct error {
 /*
  in order to parse the input, build a parser tree
 */
-class Parser_Tree {
+class AST_Tree {
     private:
-        SyntaxAnalyzer syntax;
+        // SyntaxAnalyzer syntax;
 
-        Token *root;
+    Node_Token *root;
 
-        void insert(Token *t) {
-            if (root == nullptr) {
-                root = t;
+    void insert(Node_Token *parent, vector<Token> &tokens, int &index) {
+        if (index >= tokens.size()) return;
+    
+        Token currentToken = tokens[index];
+        Node_Token *node = new Node_Token();
+        node->token = currentToken;
+        node->parent = parent;
+    
+        if (parent == nullptr)
+            root = node; // root points to the root node
+        else {
+            if (parent->left == nullptr)
+                parent->left = node;
+            else
+                parent->right = node;
+        }
+    
+        if (currentToken.type == Left_PAREN) {
+            index++;
+            insert(node, tokens, index);
+            if (index < tokens.size() && tokens[index].type == DOT) {
+                index++;
+                insert(node, tokens, index);
             } else {
-                Token *temp = root;
-    
+                Node_Token *nilNode = new Node_Token();
+                nilNode->token.type = NIL;
+                nilNode->parent = node;
+                node->right = nilNode;
             }
         }
+        else if (currentToken.type == Right_PAREN) return;
+        else {
+            index++;
+            insert(parent, tokens, index);
+        }
+    }
+
+    void print_token(Token &t) {
+        for(auto &c : t.value) {
+            if (c == ' ')
+                cout << "nul ";
+            else
+                cout << c;
+        }
+        cout << " line: " << t.line << " ";
+        cout << "column: " << t.column << " ";
+        cout << "level: " << t.level << " ";
+        cout << "type: ";
+        switch (t.type) {
+            case INT: cout << "INT"; break;
+            case FLOAT: cout << "FLOAT"; break;
+            case STRING: cout << "STRING"; break;
+            case Left_PAREN: cout << "Left_PAREN"; break;
+            case Right_PAREN: cout << "Right_PAREN"; break;
+            case DOT: cout << "DOT"; break;
+            case NIL: cout << "NIL"; break;
+            case T: cout << "T"; break;
+            case QUOTE: cout << "QUOTE"; break;
+            case SYMBOL: cout << "SYMBOL"; break;
+            default: cout << "UNKNOWN"; break;
+        }
+        cout << " \n";
+    }
+
+    void print_tree(Node_Token *node) {
+        if (node == nullptr) return;
+        print_token(node->token);
+        print_tree(node->left);
+        print_tree(node->right);
+    }
+
+
     public:
-        Parser_Tree() {
-            root = nullptr;
-        }
-        ~Parser_Tree() {
-            delete root;
-        }
+    AST_Tree() {
+        root = nullptr;
+    }
+    ~AST_Tree() {
+        delete root;
+    }
+    void build_AST(vector<Token> &tokens) {
+        int index = 0;
+        insert(root, tokens, index);
+    }
 
-        void build_tree(vector<Token> &v) {
-            for (int i = 0; i < v.size(); i++) {
-                insert(&v.at(i));
-            }
-        }
+    void print() {
+        cout << "\033[1;34menter print_tree\033[0m" << endl;
+        print_tree(root);
+        cout << "\033[1;34mend print_tree\033[0m" << endl;
 
-        void print() {
-            Token *temp = root;
-    
-        }
+    }
     
     };
         
 
 class SyntaxAnalyzer {
 private:
-    Parser_Tree tree;
+    AST_Tree tree;
 
 public:
     SyntaxAnalyzer() {
@@ -175,8 +239,12 @@ public:
 
     void build_tree(vector<Token> &v) {
         
-        tree.build_tree(v);
+        tree.build_AST(v);
+        tree.print();
+        
     }
+
+
 
 
     ~SyntaxAnalyzer() {
@@ -189,7 +257,7 @@ public:
 
 class LexicalAnalyzer {
 private:
-    vector<Token> tokenBuffer; // 暫存read data，去掉" "、"\n"、"\t"、""、    ?"\r"
+    
     int g_line = 1, g_column = 1; // '(" ", "\t"， "\")保留
     int leftCount = 0, rightCount = 0; // count '(' and ')'
     bool is_EOF;
@@ -478,6 +546,7 @@ private:
         cout << "\033[1;34menter print_vector\033[0m" << endl;
         for (int i = 0; i < v.size(); i++)
             print_token(v.at(i));
+        cout << "\033[1;34mend print_vector\033[0m" << endl;
     }
 
 
@@ -496,7 +565,7 @@ private:
         error_column = 0;
         ExpectedToken = "";
         CurrentToken = "";
-        is_EOF = false;
+        // is_EOF = false;
     }
 
 
@@ -553,6 +622,7 @@ private:
     }
 
 public:
+    vector<Token> tokenBuffer; // 暫存read data，去掉" "、"\n"、"\t"、""、    ?"\r"
     LexicalAnalyzer() : is_EOF(false), ExpectedToken(""), CurrentToken("") {}
 
     void GetStr(bool &finish_input, errorType &error) {
@@ -667,14 +737,13 @@ public:
             }
             else if (is_sep(c_peek)) { // c_peek == ';'
                 cout << "\033[1;33m" << "; Read sep!" << "\033[0m" << endl;
-                // cout << "peek: " << c_peek << endl;
+                // cout << "ignore peek: " << c_peek << endl;
                 
                 while (c_peek != '\n' && c_peek != EOF) {
                     getchar(); // ignore characters until '\n' or EOF
                     c_peek = cin.peek();
                 }
                 
-                // reset_Line_And_Column(g_line, 1);
             }
             else if (!finish_input) // 不結束
                 read_whole_string(c_peek, ' ', error, finish_input);
@@ -750,7 +819,7 @@ int main() {
             else if (finish_input) {
                 cout << "\033[1;32mfinish_input\033[0m" << endl;
                 // bulid parser tree
-                // Syntax.;
+                Syntax.build_tree(Lexical.tokenBuffer);
 
                 // reset lexical vector
                 Lexical.reset();
@@ -761,18 +830,23 @@ int main() {
                 case UNEXPECTED_TOKEN:
                     cout << "\033[1;31m" << "UNEXPECTED_TOKEN" << "\033[0m" << endl;
                     cout << "\033[1;31m" << "ERROR (unexpected token) : " << e.message << " when token at Line " << e.line << " Column " << e.column << " is >>" << e.expected << "<< " << "\033[0m" << endl;
+                    Lexical.reset();
                     break;
                 case UNEXPECTED_CLOSE_PAREN:
                     cout << "\033[1;31m" << "UNEXPECTED_CLOSE_PAREN" << "\033[0m" << endl;
                     cout << "\033[1;31m" << e.message << "\033[0m" << endl;
+                    Lexical.reset();
                     break;
                 case UNEXPECTED_STRING:
                     cout << "\033[1;31m" << e.message << "\033[0m" << endl;
+                    Lexical.reset();
                     break;
                 case UNEXPECTED_EOF:
                     cout << "\033[1;31m" << e.message << "\033[0m" << endl;
+                    Lexical.reset();
                     break;
                 case UNEXPECTED_EXIT:
+                    Lexical.reset();
                     break;
                 default:
                     break;
