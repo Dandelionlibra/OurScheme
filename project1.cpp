@@ -748,7 +748,7 @@ public:
         while(!finish_input) {
             c_peek = cin.peek();
 
-            if (!is_space(c_peek) && set_dot.first == true && set_dot.second == true) {
+            /*if (!is_space(c_peek) && set_dot.first == true && set_dot.second == true) {
                 cout << "!is_space(c_peek) && set_dot.first == true && set_dot.second == true" << endl;
                 set_dot.first = false; // 已輸入"( 1 1 . 2 "? 準備輸入?
             }
@@ -758,7 +758,7 @@ public:
                     error = UNEXPECTED_END_PAREN;
                 else
                     set_dot.second = false; // ? 是 ')', 語句合法
-            }
+            }*/
 
             if (c_peek == EOF) { // read EOF
                 error = UNEXPECTED_EOF;
@@ -810,9 +810,30 @@ public:
                     read_whole_string(c_peek, ' ', error, finish_input, tmpstr);
                 }
                 else {
-                    dot_appear.first = true;
+                    dot_appear.first = true; // read '.', than need follow <S-exp> than follow ')'
                     tokenBuffer.push_back(token_info(tmpstr));
                     g_column++;
+
+                    // read <S-exp>
+                    cout << "\033[1;34menter read dot and enter read s-exp.\033[0m" << endl;
+                    GetStr(finish_input, error);
+                    cout << "\033[1;34mend read dot and end read s-exp.\033[0m" << endl;
+                    
+                    if (error != Error_None) {
+                        cout << "\033[1;31menter read dot and throw error.\033[0m" << endl;
+                        continue;
+                    }
+                    else if (finish_input == true) {
+                        cout << "finish_input == true" << endl;
+                        finish_input = false;
+                    }
+                    else cout << "finish_input == false" << endl;
+
+                    // read ')'
+                    c_peek = cin.peek();
+                    if (c_peek != ')') {
+                        error = UNEXPECTED_END_PAREN;
+                    }
                 }
 
                 
