@@ -67,7 +67,7 @@ struct Node_Token {
     Node_Token *parent;
     Node_Token *left;
     Node_Token *right;
-    Node_Token() : left(nullptr), right(nullptr) {}
+    Node_Token() : parent(nullptr), left(nullptr), right(nullptr) {}
 };
 
 enum errorType {
@@ -76,7 +76,7 @@ enum errorType {
 
     // ERROR (unexpected token) : ')' expected when token at Line X Column Y is >>...<<
     UNEXPECTED_CLOSE_PAREN, // unexpected close parenthesis error, error (1 2 . 3 4) , correct is (1 2 . (3 4))
-
+    UNEXPECTED_END_PAREN,
     // ERROR (no closing quote) : END-OF-LINE encountered at Line X Column Y
     UNEXPECTED_STRING, // unexpected string error ("hello)
 
@@ -114,6 +114,8 @@ struct error {
             message = "UNEXPECTED_TOKEN ";
         else if (t == UNEXPECTED_CLOSE_PAREN)
             message = "ERROR (unexpected token) : " + e_token + " expected when token at Line " + to_string(line) + " Column " + to_string(column) + " is >>" + c_token + "<<";
+        else if (t == UNEXPECTED_END_PAREN)
+            message = "ERROR (unexpected token) : " + e_token + " expected when token at Line " + to_string(line) + " Column " + to_string(column) + " is >>" + c_token + "<<";
         else if (t == UNEXPECTED_STRING)
             message = "ERROR (no closing quote) : END-OF-LINE encountered at Line " + to_string(line) + " Column " + to_string(column+1);
         else if (t == UNEXPECTED_EOF)
@@ -130,46 +132,133 @@ struct error {
 */
 class AST_Tree {
     private:
-        // SyntaxAnalyzer syntax;
+    // SyntaxAnalyzer syntax;
 
     Node_Token *root;
 
-    void insert(Node_Token *parent, vector<Token> &tokens, int &index) {
-        if (index >= tokens.size()) return;
-    
-        Token currentToken = tokens[index];
-        Node_Token *node = new Node_Token();
-        node->token = currentToken;
-        node->parent = parent;
-    
-        if (parent == nullptr)
-            root = node; // root points to the root node
+/*
+    void insert(Node_Token *&parent, vector<Token> &tokens, int &index, int level = 0) {
+        if (index >= tokens.size())
+            return;
+
+        Node_Token *tmp = new Node_Token();
+        Token current_Token = tokens.at(index);
+        tmp->token = current_Token;
+
+
+        if (current_Token.type == Right_PAREN && current_Token.level == level) {  // )
+            return;
+        }
+
+        if (parent == nullptr) {
+            root = tmp; // root points to the first node
+            index++;
+            insert(root, tokens, index);
+        }
+        // ! 這裡要特判 quote
+        else if (current_Token.type == QUOTE) {
+            Node_Token *quote_node = new Node_Token();
+            quote_node->token.value = "quote";
+            quote_node->token.type = QUOTE;
+            parent->left = quote_node;
+            index++;
+            insert(quote_node, tokens, index);
+        }
+        else if (current_Token.type == Left_PAREN) {
+            parent->left = tmp;
+            index++;
+            insert(tmp, tokens, index, current_Token.level);
+        }
+        else if (current_Token.type == Right_PAREN) {
+            return;
+        }
+        else if (current_Token.type == DOT) {
+            index++;
+            insert(parent, tokens, index);
+        }
         else {
             if (parent->left == nullptr)
-                parent->left = node;
+                parent->left = tmp;
             else
-                parent->right = node;
-        }
-    
-        if (currentToken.type == Left_PAREN) {
-            index++;
-            insert(node, tokens, index);
-            if (index < tokens.size() && tokens[index].type == DOT) {
-                index++;
-                insert(node, tokens, index);
-            } else {
-                Node_Token *nilNode = new Node_Token();
-                nilNode->token.type = NIL;
-                nilNode->parent = node;
-                node->right = nilNode;
-            }
-        }
-        else if (currentToken.type == Right_PAREN) return;
-        else {
+                parent->right = tmp;
             index++;
             insert(parent, tokens, index);
         }
     }
+*/
+
+    void insert(Node_Token *&parent, vector<Token> &tokens, int &index, int level = 0) {
+        if (index >= tokens.size())
+            return;
+
+        Token current_Token = tokens.at(index);
+        Node_Token *tmp = new Node_Token();
+        tmp->token = current_Token;
+        tmp->left = nullptr;
+        tmp->right = nullptr;
+
+        if (current_Token.type == Right_PAREN) {  // Handle )
+            if (level > 0) return; // End of a list
+            if (parent != nullptr && parent->right == nullptr) {
+                Node_Token *nil_node = new Node_Token();
+                nil_node->token.value = "nil";
+                nil_node->token.type = NIL;
+                parent->right = nil_node;
+            }
+            return;
+        }
+
+        if (parent == nullptr) {
+            root = tmp; // Initialize root
+            index++;
+            insert(root, tokens, index, level);
+        }
+        else if (current_Token.type == QUOTE) {
+            Node_Token *quote_node = new Node_Token();
+            quote_node->token.value = "quote";
+            quote_node->token.type = SYMBOL;
+            
+            Node_Token *list_node = new Node_Token(); // Create node for quoted list
+            list_node->token.type = Left_PAREN;
+            
+            quote_node->left = list_node;
+            parent->left = quote_node;
+            
+            index++;
+            insert(list_node, tokens, index, level + 1);
+        }
+        else if (current_Token.type == Left_PAREN) {
+            if (parent->left == nullptr) {
+                parent->left = tmp;
+            } else {
+                Node_Token *iterator = parent->left;
+                while (iterator->right != nullptr) {
+                    iterator = iterator->right;
+                }
+                iterator->right = tmp;
+            }
+            index++;
+            insert(tmp, tokens, index, level + 1);
+        }
+        else if (current_Token.type == DOT) {
+            index++;
+            insert(parent, tokens, index, level);
+        }
+        else { // ATOM
+            if (parent->left == nullptr) {
+                parent->left = tmp;
+            } else {
+                Node_Token *iterator = parent->left;
+                while (iterator->right != nullptr) {
+                    iterator = iterator->right;
+                }
+                iterator->right = tmp;
+            }
+            index++;
+            insert(parent, tokens, index, level);
+        }
+    }
+
 
     void print_token(Token &t) {
         for(auto &c : t.value) {
@@ -200,22 +289,25 @@ class AST_Tree {
 
     void print_tree(Node_Token *node) {
         if (node == nullptr) return;
-        print_token(node->token);
+        
         print_tree(node->left);
+        print_token(node->token); // in-order traversal
         print_tree(node->right);
     }
 
 
     public:
-    AST_Tree() {
-        root = nullptr;
-    }
-    ~AST_Tree() {
-        delete root;
-    }
-    void build_AST(vector<Token> &tokens) {
+    AST_Tree() : root(nullptr) {}
+
+
+
+    void build_AST(vector<Token> tokens) {
+        cout << "\033[1;34menter build_AST\033[0m" << endl;
         int index = 0;
-        insert(root, tokens, index);
+        if (!tokens.empty())
+            insert(root, tokens, index);
+        cout << "\033[1;34mend build_AST\033[0m" << endl;
+
     }
 
     void print() {
@@ -224,8 +316,26 @@ class AST_Tree {
         cout << "\033[1;34mend print_tree\033[0m" << endl;
 
     }
+
+    Node_Token *get_root() {
+        return root;
+    }
     
-    };
+    void clear_tree(Node_Token *node) {
+        if (node == nullptr) {
+            delete node;
+            node = nullptr;
+            return;
+        }
+        clear_tree(node->left);
+        clear_tree(node->right);
+        delete node;
+    }
+
+    ~AST_Tree() {
+        clear_tree(root);
+    }
+};
         
 
 class SyntaxAnalyzer {
@@ -239,8 +349,9 @@ public:
 
     void build_tree(vector<Token> &v) {
         
-        tree.build_AST(v);
-        tree.print();
+        // tree.build_AST(v);
+        // tree.print();
+        // tree.clear_tree(tree.get_root());
         
     }
 
@@ -261,6 +372,8 @@ private:
     int g_line = 1, g_column = 1; // '(" ", "\t"， "\")保留
     int leftCount = 0, rightCount = 0; // count '(' and ')'
     bool is_EOF;
+    // bool dot_appear = false;
+    pair<bool, bool> dot_appear = {false, false}; // first: is_dot, second: enter the second atom
 
     int error_line, error_column;
     string ExpectedToken, CurrentToken;
@@ -432,8 +545,8 @@ private:
         return tmptoken;
     }
     
-    void read_whole_string(char &c_peek, char end_char, errorType &error, bool &finish_input) {
-        string tmpstr;
+    void read_whole_string(char &c_peek, char end_char, errorType &error, bool &finish_input, string tmpstr = "") {
+        
         // int begin_line = g_line;
         // int begin_column = g_column;
 
@@ -480,7 +593,6 @@ private:
                     set_EOF(true); 
                     return;
                 }
-
                 tmpstr.push_back(getchar());
                 
                 g_column++;
@@ -573,7 +685,7 @@ private:
         is_EOF = parameter;
     }
 
-    void set_ErrorToken(errorType &error, Token &T) {
+    void set_ErrorToken(errorType &error, Token &T, string undefine = "undefine") {
         // string expected = "";
         // set_CurrentToken(Token);
         CurrentToken = T.value;
@@ -583,22 +695,22 @@ private:
         // debug error type
         switch (error) {
             case UNEXPECTED_TOKEN:
-            cout << "\033[1;35merror: UNEXPECTED_TOKEN\033[0m" << endl;
+            cout << "\033[1;35mset_error: UNEXPECTED_TOKEN\033[0m" << endl;
             break;
             case UNEXPECTED_CLOSE_PAREN:
-            cout << "\033[1;35merror: UNEXPECTED_CLOSE_PAREN\033[0m" << endl;
+            cout << "\033[1;35mset_error: UNEXPECTED_CLOSE_PAREN\033[0m" << endl;
             break;
             case UNEXPECTED_STRING:
-            cout << "\033[1;35merror: UNEXPECTED_STRING\033[0m" << endl;
+            cout << "\033[1;35mset_error: UNEXPECTED_STRING\033[0m" << endl;
             break;
             case UNEXPECTED_EOF:
-            cout << "\033[1;35merror: UNEXPECTED_EOF\033[0m" << endl;
+            cout << "\033[1;35mset_error: UNEXPECTED_EOF\033[0m" << endl;
             break;
             case UNEXPECTED_EXIT:
-            cout << "\033[1;35merror: UNEXPECTED_EXIT\033[0m" << endl;
+            cout << "\033[1;35mset_error: UNEXPECTED_EXIT\033[0m" << endl;
             break;
             default:
-            cout << "\033[1;35merror: UNKNOWN_ERROR\033[0m" << endl;
+            cout << "\033[1;35mset_error: UNKNOWN_ERROR\033[0m" << endl;
             break;
         }
         
@@ -614,6 +726,9 @@ private:
             ExpectedToken = "atom or '('";
             // cout << "\033[1;35mExpectedToken: " << ExpectedToken << "\033[0m" << endl;
             
+        }
+        else if (error == UNEXPECTED_END_PAREN) {
+            ExpectedToken = ")";
         }
         else if (error == UNEXPECTED_STRING) {
             ExpectedToken = "unset!";
@@ -632,6 +747,18 @@ public:
         
         while(!finish_input) {
             c_peek = cin.peek();
+
+            if (!is_space(c_peek) && set_dot.first == true && set_dot.second == true) {
+                cout << "!is_space(c_peek) && set_dot.first == true && set_dot.second == true" << endl;
+                set_dot.first = false; // 已輸入"( 1 1 . 2 "? 準備輸入?
+            }
+            else if (!is_space(c_peek) && set_dot.first == false && set_dot.second == true) { // "( 1 1 . 2 ?" ，判斷?是否是 ')'
+                cout << "!is_space(c_peek) && set_dot.first == false && set_dot.second == true" << endl;
+                if (tokenBuffer.at(tokenBuffer.size() - 1).value != ")") // ? 不是 ')', 錯誤
+                    error = UNEXPECTED_END_PAREN;
+                else
+                    set_dot.second = false; // ? 是 ')', 語句合法
+            }
 
             if (c_peek == EOF) { // read EOF
                 error = UNEXPECTED_EOF;
@@ -654,6 +781,7 @@ public:
                 cout << "\033[1;33m" << "Read " << c_peek << "\033[0m" << endl;
                 tmpstr.push_back(getchar());
                 tokenBuffer.push_back(token_info(tmpstr));
+
                 g_column++;
 
                 if (leftCount < rightCount) 
@@ -673,12 +801,30 @@ public:
                 }
                 
             }
+            else if (c_peek == '.') {
+                tmpstr.push_back(getchar());
+                
+                c_peek = cin.peek();
+                if (c_peek != ' ') {
+                    g_column++;
+                    read_whole_string(c_peek, ' ', error, finish_input, tmpstr);
+                }
+                else {
+                    dot_appear.first = true;
+                    tokenBuffer.push_back(token_info(tmpstr));
+                    g_column++;
+                }
+
+                
+
+            }
             else if (c_peek == '\"') { // need read total line until meet another ", but not include '\n'
                                        // if meet '\n' before another ", rise -> ERROR (no closing quote) : END-OF-LINE encountered at Line 1 Column 7
                                        // ! (no closing quote)
                 // cout << "\033[1;33m" << "Read " << c_peek << " add to vector." << "\033[0m" << endl;
                 tmpstr.push_back(getchar());
                 tokenBuffer.push_back(token_info(tmpstr));
+                // tmpstr = "";
                 g_column++;
                 
                 // read total line
@@ -691,7 +837,7 @@ public:
                 if (c_peek == '\"') {
                     tmpstr.push_back(getchar()); // push_back "
                     tokenBuffer.push_back(token_info(tmpstr));
-                    tmpstr = "";
+                    // tmpstr = "";
                     g_column++;
                 }
 
@@ -707,6 +853,7 @@ public:
                 // cout << "\033[1;33m" << "Read " << c_peek << ", add to vector." << "\033[0m" << endl;
                 tmpstr.push_back(getchar());
                 tokenBuffer.push_back(token_info(tmpstr));
+                // tmpstr = "";
                 g_column++;
 
                 // c_peek = cin.peek(); //
@@ -837,11 +984,18 @@ int main() {
                     cout << "\033[1;31m" << e.message << "\033[0m" << endl;
                     Lexical.reset();
                     break;
+                case UNEXPECTED_END_PAREN:
+                    cout << "\033[1;31m" << "UNEXPECTED_END_PAREN" << "\033[0m" << endl;
+                    cout << "\033[1;31m" << e.message << "\033[0m" << endl;
+                    Lexical.reset();
+                    break;
                 case UNEXPECTED_STRING:
+                    cout << "\033[1;31m" << "UNEXPECTED_STRING" << "\033[0m" << endl;
                     cout << "\033[1;31m" << e.message << "\033[0m" << endl;
                     Lexical.reset();
                     break;
                 case UNEXPECTED_EOF:
+                    cout << "\033[1;31m" << "UNEXPECTED_EOF" << "\033[0m" << endl;
                     cout << "\033[1;31m" << e.message << "\033[0m" << endl;
                     Lexical.reset();
                     break;
