@@ -295,7 +295,7 @@ private:
 
     bool is_ATOM(TokenType type) {
         // <ATOM> ::= SYMBOL | INT | FLOAT | STRING | NIL | T | Left-PAREN Right-PAREN
-        if (type == SYMBOL || type == INT || type == FLOAT || type == STRING || type == NIL || type == T || type == Left_PAREN || type == Right_PAREN)
+        if (type == SYMBOL || type == INT || type == FLOAT || type == STRING || type == NIL || type == T) // || type == Left_PAREN || type == Right_PAREN
             return true;
         // QUOTE、DOT
         return false;
@@ -305,17 +305,27 @@ private:
         // bool legal = true;
         if (is_ATOM(token.type)) 
             return true;
-        else if (token.type == QUOTE) 
+        else if (token.type == QUOTE || token.type == Left_PAREN || token.type == Right_PAREN) 
             return true;
 
         return false;
     }
 
     void renew_dot_appear(TokenType t, int level) {
-        if (currnt_level < level) {
-            currnt_level = level;
-            dot_appear.push_back({level, false});
+        for (; currnt_level <= level; currnt_level++) {
+            dot_appear.push_back({currnt_level, false});
         }
+
+        cout << "start loop" << endl;
+        for (int i = 0; i < dot_appear.size(); i++) {
+            cout << "level: " << dot_appear.at(i).first << " appear: " << dot_appear.at(i).second << endl;
+        }
+        cout << "end loop" << endl;
+
+        // if (currnt_level < level) {
+        //     currnt_level = level;
+        //     dot_appear.push_back({level, false});
+        // }
 
         if (t == DOT)
             dot_appear.at(level).second = true;
@@ -357,7 +367,7 @@ public:
         if (tokenBuffer.size() == 1) {
             // cerr << "tokenBuffer.size() == 1" << endl;
             // . 
-            if (!is_ATOM(tokenBuffer.at(0).type) && tokenBuffer.at(0).type != QUOTE) {
+            if (!is_ATOM(tokenBuffer.at(0).type) && tokenBuffer.at(0).type != QUOTE  && tokenBuffer.at(0).type != Left_PAREN) {
                 // cerr << "tokenBuffer.at(0).type: " << tokenBuffer.at(0).type << endl;
                 error = UNEXPECTED_TOKEN;
             }
@@ -379,7 +389,7 @@ public:
                 if (tokenBuffer.at(index_prev).type == QUOTE || tokenBuffer.at(index_prev).type == Left_PAREN)
                     error = UNEXPECTED_TOKEN;
                 if (check_dot_appear(tokenBuffer.at(index_curr).level) == true) 
-                    error = UNEXPECTED_TOKEN;
+                    error = UNEXPECTED_END_PAREN;
 
             }
             // right Paren
@@ -940,7 +950,7 @@ public:
             }
             catch (errorType error) {
                 // ! when error occur, finish Get_Token(), go to main() print error message
-                finish_input = true; // ! when error occur, finish Get_Token(), go to main() print error message
+                finish_input = true;
                 
                 handle_error(error, c_peek);
                 // return; // ! return when error occur, go to main() print error message

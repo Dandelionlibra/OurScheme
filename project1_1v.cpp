@@ -286,163 +286,172 @@ class AST_Tree {
 };
         
 class SyntaxAnalyzer {
-private:
-    AST_Tree tree;
-    int currnt_level = 0;
-    vector <pair<int, bool>> dot_appear; // first: current_level, second: appear or not
-
-    // vector<Token> tokenBuffer;
-
-    bool is_ATOM(TokenType type) {
-        // <ATOM> ::= SYMBOL | INT | FLOAT | STRING | NIL | T | Left-PAREN Right-PAREN
-        if (type == SYMBOL || type == INT || type == FLOAT || type == STRING || type == NIL || type == T || type == Left_PAREN || type == Right_PAREN)
-            return true;
-        // QUOTE、DOT
-        return false;
-    }
-
-    bool is_s_exp(Token &token) {
-        // bool legal = true;
-        if (is_ATOM(token.type)) 
-            return true;
-        else if (token.type == QUOTE) 
-            return true;
-
-        return false;
-    }
-
-    void renew_dot_appear(TokenType t, int level) {
-        if (currnt_level < level) {
-            currnt_level = level;
-            dot_appear.push_back({level, false});
+    private:
+        AST_Tree tree;
+        int currnt_level = 0;
+        vector <pair<int, bool>> dot_appear; // first: current_level, second: appear or not
+    
+        // vector<Token> tokenBuffer;
+    
+        bool is_ATOM(TokenType type) {
+            // <ATOM> ::= SYMBOL | INT | FLOAT | STRING | NIL | T | Left-PAREN Right-PAREN
+            if (type == SYMBOL || type == INT || type == FLOAT || type == STRING || type == NIL || type == T) // || type == Left_PAREN || type == Right_PAREN
+                return true;
+            // QUOTE、DOT
+            return false;
         }
-
-        if (t == DOT)
-            dot_appear.at(level).second = true;
-    }
-
-    bool check_dot_appear(int level) {
-        int size = dot_appear.size();
-        if (level == size)  // 目前 level=0 時，若 size=0 表當前 level 還未進入過，且未出現過 dot
-            dot_appear.push_back({level, false}); // 進入當前 level
-        
-        else if (level < size)  // check whether dot appear in current level or not
-            return dot_appear.at(level).second;
-        else
-            cerr << "\033[1;31mundefined error\033[0m" << endl;
-        
-        return false;
-    }
-
-public:
-    SyntaxAnalyzer() {
-        currnt_level = 0;
-        // dot_appear.push_back({0, false});
-    }
-
-    void build_tree(vector<Token> &v) {
-        
-        // tree.build_AST(v);
-        // tree.print();
-        // tree.clear_tree(tree.get_root());
-        
-        
-    }
-
-    void check_syntax(vector<Token> &tokenBuffer, errorType &error) {
-        int token_size = tokenBuffer.size();
-
-        // cerr << "\033[1;34menter check_syntax\033[0m" << endl;
-        // cerr << "tokenBuffer.size(): " << tokenBuffer.size() << endl;
-        if (tokenBuffer.size() == 1) {
-            // cerr << "tokenBuffer.size() == 1" << endl;
-            // . 
-            if (!is_ATOM(tokenBuffer.at(0).type) && tokenBuffer.at(0).type != QUOTE) {
-                // cerr << "tokenBuffer.at(0).type: " << tokenBuffer.at(0).type << endl;
-                error = UNEXPECTED_TOKEN;
+    
+        bool is_s_exp(Token &token) {
+            // bool legal = true;
+            if (is_ATOM(token.type)) 
+                return true;
+            else if (token.type == QUOTE || token.type == Left_PAREN || token.type == Right_PAREN) 
+                return true;
+    
+            return false;
+        }
+    
+        void renew_dot_appear(TokenType t, int level) {
+            for (; currnt_level <= level; currnt_level++) {
+                dot_appear.push_back({currnt_level, false});
             }
+    
+            cout << "start loop" << endl;
+            for (int i = 0; i < dot_appear.size(); i++) {
+                cout << "level: " << dot_appear.at(i).first << " appear: " << dot_appear.at(i).second << endl;
+            }
+            cout << "end loop" << endl;
+    
+            // if (currnt_level < level) {
+            //     currnt_level = level;
+            //     dot_appear.push_back({level, false});
+            // }
+    
+            if (t == DOT)
+                dot_appear.at(level).second = true;
+        }
+    
+        bool check_dot_appear(int level) {
+            int size = dot_appear.size();
+            if (level == size)  // 目前 level=0 時，若 size=0 表當前 level 還未進入過，且未出現過 dot
+                dot_appear.push_back({level, false}); // 進入當前 level
+            
+            else if (level < size)  // check whether dot appear in current level or not
+                return dot_appear.at(level).second;
+            else
+                cerr << "\033[1;31mundefined error\033[0m" << endl;
+            
+            return false;
+        }
+    
+    public:
+        SyntaxAnalyzer() {
+            currnt_level = 0;
+            // dot_appear.push_back({0, false});
+        }
+    
+        void build_tree(vector<Token> &v) {
+            
+            // tree.build_AST(v);
+            // tree.print();
+            // tree.clear_tree(tree.get_root());
             
             
         }
-        else if (token_size > 1) {
-            // cerr << "token_size > 1" << endl;
-            int index_curr = token_size - 1;
-            int index_prev = token_size - 2;
-            if (tokenBuffer.at(index_prev).value == "\'" && !is_s_exp(tokenBuffer.at(index_curr))) {
-                error = UNEXPECTED_TOKEN;
-            }
-
-            // DOT
-            if (tokenBuffer.at(index_curr).type == DOT) {
-                // DOT 前後必須是完整 ATOM 或是 S-EXP
-                // 避免 ('. or (. 
-                if (tokenBuffer.at(index_prev).type == QUOTE || tokenBuffer.at(index_prev).type == Left_PAREN)
+    
+        void check_syntax(vector<Token> &tokenBuffer, errorType &error) {
+            int token_size = tokenBuffer.size();
+    
+            // cerr << "\033[1;34menter check_syntax\033[0m" << endl;
+            // cerr << "tokenBuffer.size(): " << tokenBuffer.size() << endl;
+            if (tokenBuffer.size() == 1) {
+                // cerr << "tokenBuffer.size() == 1" << endl;
+                // . 
+                if (!is_ATOM(tokenBuffer.at(0).type) && tokenBuffer.at(0).type != QUOTE  && tokenBuffer.at(0).type != Left_PAREN) {
+                    // cerr << "tokenBuffer.at(0).type: " << tokenBuffer.at(0).type << endl;
                     error = UNEXPECTED_TOKEN;
-                if (check_dot_appear(tokenBuffer.at(index_curr).level) == true) 
-                    error = UNEXPECTED_TOKEN;
-
-            }
-            // right Paren
-            if (tokenBuffer.at(index_curr).type == Right_PAREN) {
-                // Right_PAREN 前必須是完整 ATOM 或是 S-EXP
-                // 避免 ') or .) 
-                if (tokenBuffer.at(index_prev).type == QUOTE || tokenBuffer.at(index_prev).type == DOT)
-                    error = UNEXPECTED_TOKEN;
-                // () 時, 改成(nil)
-                if (tokenBuffer.at(index_prev).type == Left_PAREN) {
-                    Token nil_token;
-                    nil_token.type = NIL;
-                    nil_token.value = "nil";
-                    nil_token.line = tokenBuffer.at(index_prev).line;
-                    nil_token.column = tokenBuffer.at(index_prev).column + 1;
-                    nil_token.level = tokenBuffer.at(index_prev).level + 1;
-                    tokenBuffer.insert(tokenBuffer.begin() + index_curr, nil_token);
-                    index_curr++;
                 }
-
+                
+                
             }
-  
-            renew_dot_appear(tokenBuffer.at(index_curr).type, tokenBuffer.at(index_curr).level);
+            else if (token_size > 1) {
+                // cerr << "token_size > 1" << endl;
+                int index_curr = token_size - 1;
+                int index_prev = token_size - 2;
+                if (tokenBuffer.at(index_prev).value == "\'" && !is_s_exp(tokenBuffer.at(index_curr))) {
+                    error = UNEXPECTED_TOKEN;
+                }
+    
+                // DOT
+                if (tokenBuffer.at(index_curr).type == DOT) {
+                    // DOT 前後必須是完整 ATOM 或是 S-EXP
+                    // 避免 ('. or (. 
+                    if (tokenBuffer.at(index_prev).type == QUOTE || tokenBuffer.at(index_prev).type == Left_PAREN)
+                        error = UNEXPECTED_TOKEN;
+                    if (check_dot_appear(tokenBuffer.at(index_curr).level) == true) 
+                        error = UNEXPECTED_END_PAREN;
+    
+                }
+                // right Paren
+                if (tokenBuffer.at(index_curr).type == Right_PAREN) {
+                    // Right_PAREN 前必須是完整 ATOM 或是 S-EXP
+                    // 避免 ') or .) 
+                    if (tokenBuffer.at(index_prev).type == QUOTE || tokenBuffer.at(index_prev).type == DOT) {
+                        error = UNEXPECTED_TOKEN;
+                    }
+                    // () 時, 改成(nil)
+                    if (tokenBuffer.at(index_prev).type == Left_PAREN) {
+                        Token nil_token;
+                        nil_token.type = NIL;
+                        nil_token.value = "nil";
+                        nil_token.line = tokenBuffer.at(index_prev).line;
+                        nil_token.column = tokenBuffer.at(index_prev).column + 1;
+                        nil_token.level = tokenBuffer.at(index_prev).level + 1;
+                        tokenBuffer.insert(tokenBuffer.begin() + index_curr, nil_token);
+                        index_curr++;
+                    }
+                }
+                renew_dot_appear(tokenBuffer.at(index_curr).type, tokenBuffer.at(index_curr).level);
+            }
+    
+            // cerr << "\033[1;34mend check_syntax\033[0m" << endl;
         }
-
-        // cerr << "\033[1;34mend check_syntax\033[0m" << endl;
-    }
-
-    void print_space(int n) {
-        for (int i = 0; i < n; i++)
-            cout << " ";
-    }
-
-    void pretty_print(vector<Token> &tokenBuffer) {
-        int level = 0;
-        cerr << "\033[1;34menter pretty_print\033[0m" << endl;
-        for (int i = 0; i < tokenBuffer.size(); i++) {
-            Token current_Token = tokenBuffer.at(i);
-            if (current_Token.type == Left_PAREN) {
-                print_space(level);
-                cout << "( " ;
-                level++;
-            }
-            else if (current_Token.type == Right_PAREN) {
-                level--;
-                print_space(level);
-                cout << ")" << endl;
-            }
-            else {
-                // print_space(level);
-                cout << current_Token.value << endl;
-            }
+    
+        void print_space(int n) {
+            for (int i = 0; i < n; i++)
+                cout << " ";
         }
-        cerr << "\033[1;34mend pretty_print\033[0m" << endl;
-    }
-
-    ~SyntaxAnalyzer() {
-
-    }
-
-
-};
-
+    
+        void pretty_print(vector<Token> &tokenBuffer) {
+            int level = 0;
+            cerr << "\033[1;34menter pretty_print\033[0m" << endl;
+            for (int i = 0; i < tokenBuffer.size(); i++) {
+                Token current_Token = tokenBuffer.at(i);
+                if (current_Token.type == Left_PAREN) {
+                    print_space(level);
+                    cout << "( " ;
+                    level++;
+                }
+                else if (current_Token.type == Right_PAREN) {
+                    level--;
+                    print_space(level);
+                    cout << ")" << endl;
+                }
+                else {
+                    // print_space(level);
+                    cout << current_Token.value << endl;
+                }
+            }
+            cerr << "\033[1;34mend pretty_print\033[0m" << endl;
+        }
+    
+        ~SyntaxAnalyzer() {
+    
+        }
+    
+    
+    };
+   
 class LexicalAnalyzer {
 private:
     
@@ -754,7 +763,7 @@ private:
                 error = Error(e, "atom or '('", current, error_line, error_column);
                 break;
             case UNEXPECTED_END_PAREN:
-                error = Error(e, ")", current, error_line, error_column);
+                error = Error(e, "')'", current, error_line, error_column);
                 break;
             case UNEXPECTED_STRING:
                 error = Error(e, "unset yet", current, error_line, error_column);
