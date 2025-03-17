@@ -763,7 +763,7 @@ private:
                 error = Error(e, "atom or '('", current, error_line, error_column);
                 break;
             case UNEXPECTED_END_PAREN:
-                error = Error(e, ")", current, error_line, error_column);
+                error = Error(e, "')'", current, error_line, error_column);
                 break;
             case UNEXPECTED_STRING:
                 error = Error(e, "unset yet", current, error_line, error_column);
