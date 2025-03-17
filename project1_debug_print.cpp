@@ -1,5 +1,6 @@
 #include <iostream>
 #include <string>
+#include <cmath>
 #include <vector>
 using namespace std;
 
@@ -370,19 +371,16 @@ private:
             dot_appear.push_back({level, false});
         }
 
-        if (t == DOT) {
+        if (t == DOT)
             dot_appear.at(level).second = true;
-        }
     }
 
     bool check_dot_appear(int level) {
         int size = dot_appear.size();
-        if (level == size) { // 目前 level=0 時，若 size=0 表當前 level 還未進入過，且未出現過 dot
+        if (level == size) // 目前 level=0 時，若 size=0 表當前 level 還未進入過，且未出現過 dot
             dot_appear.push_back({level, false}); // 進入當前 level
-        }
-        else if (level < size) { // check whether dot appear in current level or not
+        else if (level < size) // check whether dot appear in current level or not
             return dot_appear.at(level).second;
-        }
         else
             cerr << "\033[1;31mundefined error\033[0m" << endl;
         
@@ -441,8 +439,19 @@ public:
             if (tokenBuffer.at(index_curr).type == Right_PAREN) {
                 // Right_PAREN 前必須是完整 ATOM 或是 S-EXP
                 // 避免 ') or .) 
-                if (tokenBuffer.at(index_prev).type == QUOTE || tokenBuffer.at(index_prev).type == DOT) {
+                if (tokenBuffer.at(index_prev).type == QUOTE || tokenBuffer.at(index_prev).type == DOT)
                     error = UNEXPECTED_TOKEN;
+                
+                // () 時, 改成(nil)
+                if (tokenBuffer.at(index_prev).type == Left_PAREN) {
+                    Token nil_token;
+                    nil_token.type = NIL;
+                    nil_token.value = "nil";
+                    nil_token.line = tokenBuffer.at(index_prev).line;
+                    nil_token.column = tokenBuffer.at(index_prev).column + 1;
+                    nil_token.level = tokenBuffer.at(index_prev).level + 1;
+                    tokenBuffer.insert(tokenBuffer.begin() + index_curr, nil_token);
+                    index_curr++;
                 }
             }
   
@@ -452,13 +461,8 @@ public:
         cerr << "\033[1;34mend check_syntax\033[0m" << endl;
     }
 
-
-
-
     ~SyntaxAnalyzer() {
-
     }
-
 
 };
 
@@ -497,15 +501,6 @@ private:
 
     bool is_PAREN(char token, bool &finish_input) { // check whether the token is '(' or ')'
         bool is_PAREN = false;
-        /*
-        // 做特判，避免單一的 symbol 跟緊跟著的左右括號一起處理
-        if (tokenBuffer.size() == 1 && leftCount == 0 && rightCount == 0) { // ex. 9(454(.3 2 * )3)
-            if (tokenBuffer.at(0).value != "\'") { // 排除 '(454(.3 2 * )3)
-                finish_input = true;
-                return false;
-            }
-        }
-        */
 
         if (token == '(' || token == ')') {
             is_PAREN = true;
@@ -537,6 +532,9 @@ private:
     bool is_int(string &str) {
         if (str.empty())
             return false;
+        // + or -
+        else if (str.size() == 1 && (str == "+" || str == "-"))
+            return false;
 
         string tmp = str;
         int i = 0;
@@ -556,7 +554,7 @@ private:
         }
 
         str = tmp;
-        cerr << "END : int str: " << str << endl;
+        // cerr << "END : int str: " << str << endl;
         return true;
     }
 
@@ -568,47 +566,50 @@ private:
         string sign = "";
         int i = 0;
         int dot_count = 0;
+        // - or +
+        if (str.size() == 1 && (str.at(0) == '+' || str.at(0) == '-'))
+            return false;
+        // -. or +.
+        else if (str == "-." || str == "+.")
+            return false;
+
         while (i < str.size()) {
             if (i == 0 && (str.at(0) == '+' || str.at(0) == '-')) {
                 sign = str.at(0); // save the sign
                 tmp = str.substr(1); // Remove the sign from the string
-                i++;
-                continue;
+                // i++;
+                // continue;
             }
-            if (str[i] == '.') {
+            else if (str[i] == '.') {
                 dot_count++;
                 if (dot_count > 1)
                     return false;
-                if (i == 0 || !isdigit(str[i - 1])) {
+                if (i == 0 || !isdigit(str[i - 1]))
                     tmp.insert(tmp.begin(), '0'); // Insert '0' before the dot if no digit before it
-                }
-                i++;
-                continue;
+                // i++;
+                // continue;
             }
-            if (!isdigit(str[i]) && str[i] != '.')
+            else if (!isdigit(str[i]) && str[i] != '.')
                 return false;
             i++;
         }
         
+        // 四捨五入到小數點後第三位
+        float float_value = stof(tmp);
+        cout << "float_value: " << float_value << endl;
+        float_value = round(float_value * 1000.0) / 1000.0;
+        tmp = to_string(float_value);
+
+        // 小數點後大於三位數, 只取到小數點後第三位
         int dot_pos = tmp.find('.');
-        // 小數點後大於三位數
         if (tmp.size() - dot_pos > 4)
             tmp = tmp.substr(0, dot_pos + 4);
-        // add 0 to the end if after dot don't have at least 3 digits
-        else { 
-            if (tmp[tmp.size() - 1] == '.')
-                tmp = tmp + "000";
-            else if (tmp[tmp.size() - 2] == '.')
-                tmp = tmp + "00";
-            else if (tmp[tmp.size() - 3] == '.')
-                tmp = tmp + "0";
-        }
 
         if (sign == "-")
             tmp = sign + tmp;
 
         str = tmp;
-        cerr << "END : float str: " << str << endl;
+        // cerr << "END : float str: " << str << endl;
         return true;
     }
 
