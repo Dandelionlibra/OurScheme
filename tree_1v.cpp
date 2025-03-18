@@ -165,25 +165,35 @@ class AST_Tree {
     Node_Token* insert(Node_Token *parent, vector<Token> &tokenbuffer, int &index, int level = 0) {
         // int size = tokenbuffer.size();
         Node_Token *node = new Node_Token;
-        if (index >= tokenbuffer.size()) {
-            cerr << "\033[1;31mtouch bottom\033[0m" << endl;
+        if (index > tokenbuffer.size()) {
+            cerr << "\033[1;31m2. touch bottom\033[0m" << endl;
             return nullptr;
+        }
+        else if (index == tokenbuffer.size()) {
+            cerr << "\033[1;31m1. touch bottom\033[0m" << endl;
+            Token nil_token;
+            nil_token.value = "nil";
+            nil_token.type = NIL;
+            nil_token.level = tokenbuffer.at(index - 1).level;
+            node = set_node(nil_token, nullptr, nullptr, parent);
+            return node;
         }
 
         // **************************** setting token ****************************
         // !last_token
-        /*Token last_token;
+        Token last_token;
         if (index > 0)
             last_token = tokenbuffer.at(index - 1);
         else {
             last_token.value = "None";
             last_token.type = None;
+            last_token.level = 0;
         }
-        cerr << "last_token: " << last_token.value << endl;*/
+        cerr << "last_token: " << last_token.value << endl;
         // !current_token
         Token current_token = tokenbuffer.at(index);
         cerr << "current_token: " << current_token.value << endl;
-        index++;
+        
         // !next_token
         Token next_token;
         if (index < tokenbuffer.size())
@@ -194,6 +204,7 @@ class AST_Tree {
         }
         cerr << "next_token: " << next_token.value << endl;
         // *********************************************************
+        index++;
         
         // current is s-exp or not
         if (is_s_exp(current_token)) {
@@ -207,10 +218,12 @@ class AST_Tree {
                     Token nil_token;
                     nil_token.value = "nil";
                     nil_token.type = NIL;
+                    nil_token.level = last_token.level;
                     // node 設為 nil，並將其 left、right 指向 nullptr，回傳給 parent->left or parent->right
                     node = set_node(nil_token, nullptr, nullptr, parent); // 為 leaf node，不需再往下 insert
                     // cerr << "set_node value: " << nil_token.value << endl;
                     index++; // 回傳給 parent 後 skip 下個 ")"
+                    node->parent->right = insert(node->parent, tokenbuffer, index);
                     
                 }
                 // (s-exp)
@@ -244,32 +257,34 @@ class AST_Tree {
             }
             else {
                 cerr << "\033[1;35m" << "tokenbuffer.size(): " << tokenbuffer.size() << "\033[0m" << endl;
-                if (tokenbuffer.size() == 1) {
+                /*if (tokenbuffer.size() == 1) {
                     // 
                     
                     node = set_node(current_token, nullptr, nullptr, parent);
                     // cerr << "set_node value: " << current_token.value << endl;
                 }
                 
-                else {
-                    Node_Token *none = new Node_Token;
-                    Token none_token;
-                    none_token.value = "None";
-                    none_token.type = None;
-                    node = set_node(none_token, nullptr, nullptr, parent);
+                else {*/
+                    // Node_Token *none = new Node_Token;
+                    // Token none_token;
+                    // none_token.value = "None";
+                    // none_token.type = None;
+                    // node = set_node(none_token, nullptr, nullptr, parent);
+                    node = set_node(current_token, nullptr, nullptr, parent);
 
                     // cerr << "set_node value: " << current_token.value << endl;
-                    Node_Token *left_quote = new Node_Token;
-                    left_quote = set_node(current_token, nullptr, nullptr, node);
-                    node->left = left_quote;
+                    // Node_Token *left_quote = new Node_Token;
+                    // left_quote = set_node(current_token, nullptr, nullptr, node);
+                    node->left = insert(node, tokenbuffer, index);
+                    index++;
                     node->right = insert(node, tokenbuffer, index);
-                }
+                /*}*/
             }
             
         }
         // Right_PAREN
         else if (current_token.type == Right_PAREN) {
-            cerr << "\033[1;35mis_Right_PAREN\033[0m" << endl;
+            cerr << "\033[1;35m---------------is_Right_PAREN-------------\033[0m" << endl;
             // Node_Token *node = new Node_Token;
             current_token.value = "nil"; // ) -> nil
             current_token.type = NIL;
@@ -319,8 +334,9 @@ class AST_Tree {
     void print_tree(Node_Token *node) {
         if (node == nullptr) return;
         
+        print_token(node->token);
         print_tree(node->left);
-        print_token(node->token); // in-order traversal
+        // print_token(node->token); // in-order traversal
         print_tree(node->right);
     }
 
@@ -1068,7 +1084,7 @@ public:
         while(!finish_input);
 
         // ! print test
-        // print_vector(tokenBuffer);
+        print_vector(tokenBuffer);
     }
 
     bool Get_is_EOF(){
