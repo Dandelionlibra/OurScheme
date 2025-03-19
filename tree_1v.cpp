@@ -193,7 +193,7 @@ class AST_Tree {
         // !current_token
         Token current_token = tokenbuffer.at(index);
         cerr << "current_token: " << current_token.value << endl;
-        
+        index++;
         // !next_token
         Token next_token;
         if (index < tokenbuffer.size())
@@ -204,7 +204,7 @@ class AST_Tree {
         }
         cerr << "next_token: " << next_token.value << endl;
         // *********************************************************
-        index++;
+        
         
         // current is s-exp or not
         if (is_s_exp(current_token)) {
@@ -231,9 +231,9 @@ class AST_Tree {
                     // 當前 node 內會存 "("
                     node = set_node(current_token, nullptr, nullptr, parent);
                     // cerr << "set_node value: " << current_token.value << endl;
-                    node->left = insert(node, tokenbuffer, index, level);
+                    node->left = insert(node, tokenbuffer, index);
                     index++;
-                    node->right = insert(node, tokenbuffer, index, level);
+                    node->right = insert(node, tokenbuffer, index);
                 }
                 
             }
@@ -257,44 +257,48 @@ class AST_Tree {
             }
             else {
                 cerr << "\033[1;35m" << "tokenbuffer.size(): " << tokenbuffer.size() << "\033[0m" << endl;
-                /*if (tokenbuffer.size() == 1) {
-                    // 
-                    
-                    node = set_node(current_token, nullptr, nullptr, parent);
-                    // cerr << "set_node value: " << current_token.value << endl;
+                node = set_node(current_token, nullptr, nullptr, parent);
+                // 若下個 token 為 DOT，則當前 token 為左子樹，left、right 指向 nullptr，不再往下遞迴 insert
+                if (next_token.type == DOT) {
+                    cerr << "\033[1;35m" << "next_token.type == DOT" << "\033[0m" << endl;
+                    // cerr << "\033[1;35m" << "ignore next DOT token" << "\033[0m" << endl;
+                    // index++;
                 }
-                
-                else {*/
-                    // Node_Token *none = new Node_Token;
-                    // Token none_token;
-                    // none_token.value = "None";
-                    // none_token.type = None;
-                    // node = set_node(none_token, nullptr, nullptr, parent);
-                    node = set_node(current_token, nullptr, nullptr, parent);
-
-                    // cerr << "set_node value: " << current_token.value << endl;
-                    // Node_Token *left_quote = new Node_Token;
-                    // left_quote = set_node(current_token, nullptr, nullptr, node);
+                // 若上個 token 為 DOT，則當前 token 為右子樹，left、right 指向 nullptr，不再往下遞迴 insert
+                else if (last_token.type == DOT) {
+                    // ignore next ')' token
+                    cerr << "\033[1;35m" << "last_token.type == DOT" << "\033[0m" << endl;
+                    cerr << "\033[1;35m" << "ignore next ')' token" << "\033[0m" << endl;
+                    index++;
+                }
+                else {
                     node->left = insert(node, tokenbuffer, index);
                     index++;
                     node->right = insert(node, tokenbuffer, index);
-                /*}*/
+                }
+                
             }
             
         }
         // Right_PAREN
         else if (current_token.type == Right_PAREN) {
             cerr << "\033[1;35m---------------is_Right_PAREN-------------\033[0m" << endl;
-            // Node_Token *node = new Node_Token;
-            current_token.value = "nil"; // ) -> nil
-            current_token.type = NIL;
-            node = set_node(current_token, nullptr, nullptr, parent);
+            if (last_token.type == DOT) { // (a . b), ')' 前是 b，不會是 '.'
+                // will not reach here
+            }
+            else {
+                current_token.value = "nil"; // ) -> nil
+                current_token.type = NIL;
+                node = set_node(current_token, nullptr, nullptr, parent);
+            }
+            
             // cerr << "set_node value: " << current_token.value << endl;
         }
         // DOT
         else if (current_token.type == DOT) {
             cerr << "\033[1;35mis_DOT\033[0m" << endl;
             // 回到當前 node 的 parent->right 去 insert nil 進去，並將其 left、right 指向 nullptr
+            node->parent->right = insert(node->parent, tokenbuffer, index);
 
         }
 
