@@ -174,21 +174,24 @@ class AST_Tree {
     }
 
     Node_Token* insert(Node_Token *parent, vector<Token> &tokenbuffer, int &index, int level = 0) {
-        // int size = tokenbuffer.size();
+        int size = tokenbuffer.size();
         Node_Token *node = new Node_Token;
-        if (index > tokenbuffer.size()) {
+        Token none_token = set_token("None", None, -1);
+        Token nil_token = set_token("nil", NIL, -1);
+
+        if (index > size) {
             cerr << "\033[1;31m2. touch bottom\033[0m" << endl;
             return nullptr;
         }
-        else if (index == tokenbuffer.size() || tokenbuffer.at(index).type == Right_PAREN) {
+        else if (index == size || tokenbuffer.at(index).type == Right_PAREN) {
             // index++;
             cerr << "\033[1;31m1. touch bottom\033[0m" << endl;
-            Token nil_token = set_token("nil", NIL, tokenbuffer.at(index - 1).level);
             node = set_node(nil_token, nullptr, nullptr, parent);
             return node;
         }
 
         // **************************** setting token ****************************
+        
         // !last_token
         Token last_token;
         if (index > 0) last_token = tokenbuffer.at(index - 1);
@@ -197,10 +200,10 @@ class AST_Tree {
         // !current_token
         Token current_token = tokenbuffer.at(index);
         cerr << "current_token: " << current_token.value << endl;
-        index++;
+        // index++;
         // !next_token
         Token next_token;
-        if (index < tokenbuffer.size()) next_token = tokenbuffer.at(index);
+        if (index+1 < size) next_token = tokenbuffer.at(index+1);
         else next_token = set_token("None", None, -1);
         cerr << "next_token: " << next_token.value << endl;
         // *********************************************************
@@ -257,7 +260,7 @@ class AST_Tree {
             }
             // ATOM := SYMBOL | INT | FLOAT | STRING | NIL | T
             else {
-                cerr << "\033[1;35m" << "tokenbuffer.size(): " << tokenbuffer.size() << "\033[0m" << endl;
+                cerr << "\033[1;35m" << "tokenbuffer.size(): " << size << "\033[0m" << endl;
                 node = set_node(current_token, nullptr, nullptr, parent);
                 // if (last_token.type == QUOTE) {
                 // }
@@ -427,832 +430,848 @@ class AST_Tree {
 };
         
 class SyntaxAnalyzer {
-private:
-    AST_Tree tree;
-    int currnt_level = 0;
-    vector <pair<int, bool>> dot_appear; // first: current_level, second: appear or not
-
-    // vector<Token> tokenBuffer;
-
-    bool is_ATOM(TokenType type) {
-        // <ATOM> ::= SYMBOL | INT | FLOAT | STRING | NIL | T | Left-PAREN Right-PAREN
-        if (type == SYMBOL || type == INT || type == FLOAT || type == STRING || type == NIL || type == T) // || type == Left_PAREN || type == Right_PAREN
-            return true;
-        // QUOTE、DOT
-        return false;
-    }
-
-    bool is_s_exp(Token &token) {
-        // bool legal = true;
-        if (is_ATOM(token.type)) 
-            return true;
-        else if (token.type == QUOTE || token.type == Left_PAREN || token.type == Right_PAREN) 
-            return true;
-
-        return false;
-    }
-
-    void renew_dot_appear(TokenType t, int level) {
-        for (; currnt_level <= level; currnt_level++)
-            dot_appear.push_back({currnt_level, false});
-        
-
-        // cout << "start loop" << endl;
-        // for (int i = 0; i < dot_appear.size(); i++) {
-        //     cout << "level: " << dot_appear.at(i).first << " appear: " << dot_appear.at(i).second << endl;
-        // }
-        // cout << "end loop" << endl;
-
-        // if (currnt_level < level) {
-        //     currnt_level = level;
-        //     dot_appear.push_back({level, false});
-        // }
-
-        if (t == DOT)
-            dot_appear.at(level).second = true;
-    }
-
-    bool check_dot_appear(int level) {
-        int size = dot_appear.size();
-        if (level == size)  // 目前 level=0 時，若 size=0 表當前 level 還未進入過，且未出現過 dot
-            dot_appear.push_back({level, false}); // 進入當前 level
-        
-        else if (level < size)  // check whether dot appear in current level or not
-            return dot_appear.at(level).second;
-        else
-            cerr << "\033[1;31mundefined error\033[0m" << endl;
-        
-        return false;
-    }
-
-public:
-    SyntaxAnalyzer() {
-        currnt_level = 0;
-        // dot_appear.push_back({0, false});
-    }
-
-    void build_tree(vector<Token> &v) {
-        
-        tree.build_AST(v);
-        // tree.print();
-        // tree.clear_tree(tree.get_root());
-        
-        
-    }
-
-    void check_syntax(vector<Token> &tokenBuffer, errorType &error) {
-        int token_size = tokenBuffer.size();
-
-        // cerr << "\033[1;34menter check_syntax\033[0m" << endl;
-        // cerr << "tokenBuffer.size(): " << tokenBuffer.size() << endl;
-        if (tokenBuffer.size() == 1) {
-            // cerr << "tokenBuffer.size() == 1" << endl;
-            // . 
-            if (!is_ATOM(tokenBuffer.at(0).type) && tokenBuffer.at(0).type != QUOTE  && tokenBuffer.at(0).type != Left_PAREN) {
-                // cerr << "tokenBuffer.at(0).type: " << tokenBuffer.at(0).type << endl;
-                error = UNEXPECTED_TOKEN;
-            }
-            
-            
-        }
-        else if (token_size > 1) {
-            // cerr << "token_size > 1" << endl;
-            int index_curr = token_size - 1;
-            int index_prev = token_size - 2;
-            if (tokenBuffer.at(index_prev).value == "\'" && !is_s_exp(tokenBuffer.at(index_curr))) {
-                error = UNEXPECTED_TOKEN;
-            }
-
-            // DOT
-            if (tokenBuffer.at(index_curr).type == DOT) {
-                // DOT 前後必須是完整 ATOM 或是 S-EXP
-                // 避免 ('. or (. 
-                if (tokenBuffer.at(index_prev).type == QUOTE || tokenBuffer.at(index_prev).type == Left_PAREN)
-                    error = UNEXPECTED_TOKEN;
-                if (check_dot_appear(tokenBuffer.at(index_curr).level) == true) 
-                    error = UNEXPECTED_END_PAREN;
-
-            }
-            // right Paren
-            if (tokenBuffer.at(index_curr).type == Right_PAREN) {
-                // Right_PAREN 前必須是完整 ATOM 或是 S-EXP
-                // 避免 ') or .) 
-                if (tokenBuffer.at(index_prev).type == QUOTE || tokenBuffer.at(index_prev).type == DOT) {
-                    error = UNEXPECTED_TOKEN;
-                }
-                // () 時, 改成(nil)
-                /*if (tokenBuffer.at(index_prev).type == Left_PAREN) {
-                    Token nil_token;
-                    nil_token.type = NIL;
-                    nil_token.value = "nil";
-                    nil_token.line = tokenBuffer.at(index_prev).line;
-                    nil_token.column = tokenBuffer.at(index_prev).column + 1;
-                    nil_token.level = tokenBuffer.at(index_prev).level + 1;
-                    tokenBuffer.insert(tokenBuffer.begin() + index_curr, nil_token);
-                    index_curr++;
-                }*/
-            }
-            renew_dot_appear(tokenBuffer.at(index_curr).type, tokenBuffer.at(index_curr).level);
-        }
-
-        // cerr << "\033[1;34mend check_syntax\033[0m" << endl;
-    }
-
-    void print_space(int n) {
-        for (int i = 0; i < n; i++)
-            cout << " ";
-    }
-
-    void pretty_print(vector<Token> &tokenBuffer) {
-        int level = 0;
-        cerr << "\033[1;34menter pretty_print\033[0m" << endl;
-        for (int i = 0; i < tokenBuffer.size(); i++) {
-            Token current_Token = tokenBuffer.at(i);
-            if (current_Token.type == Left_PAREN) {
-                print_space(level);
-                cout << "( " ;
-                level++;
-            }
-            else if (current_Token.type == Right_PAREN) {
-                level--;
-                print_space(level);
-                cout << ")" << endl;
-            }
-            else {
-                // print_space(level);
-                cout << current_Token.value << endl;
-            }
-        }
-        cerr << "\033[1;34mend pretty_print\033[0m" << endl;
-    }
-
-    ~SyntaxAnalyzer() {
-
-    }
-
-
-};
-
-class LexicalAnalyzer {
-private:
+    private:
+        AST_Tree tree;
+        int currnt_level = 0;
+        vector <pair<int, bool>> dot_appear; // first: current_level, second: appear or not
     
-    int line, column; // '(" ", "\t"， "\")保留
-    int leftParen = 0, rightParen = 0; // count '(' and ')'
-    int level;
-    bool is_EOF;
-    // bool dot_appear = false;
-    // pair<bool, bool> dot_appear = {false, false}; // first: is_dot, second: enter the second atom
-
-    int error_line, error_column;
-    // string ExpectedToken, CurrentToken;
-
-    void reset_Line_And_Column(int l, int c) {
-        line = l;
-        column = c;
-        // cerr << "reset line: " << g_line << " column: " << g_column << endl;
-    }
-
-    bool is_space(char token) { // check whether the token is ' ' or '\t'
-        if (token == ' ' || token == '\t')
-            return true;
-        return false;
-    }
-
-    bool is_enter(char token) { // check whether the token is '\n' or '\r'
-        if (token == '\n' || token == '\r')
-            return true;
-        return false;
-    }
-
-    bool is_PAREN(char token, bool &finish_input) { // check whether the token is '(' or ')'
-        bool is_PAREN = false;
-
-        if (token == '(' || token == ')') {
-            is_PAREN = true;
-            if (token == '(') {// count '('
-                leftParen++;
-                level++;
-            }
-            else {// count ')'
-                rightParen++;
-                level--;
-            }
-        }
-
-        return is_PAREN;
-    }
+        // vector<Token> tokenBuffer;
     
-    bool is_comment(char token ) {
-        if ( token == ';' )
-            return true;
-        return false;
-    }
-
-    bool is_special_symbol(char token) {
-        if (token == '(' || token == ')' || token == '\'' || token == '\"' || token == ';' || token == ' ' || token == '\t' || token == '\n' || token == '\r' || token == EOF)
-            return true;
-        return false;
-    }
-
-    bool is_int(string &str) {
-        if (str.empty())
+        bool is_ATOM(TokenType type) {
+            // <ATOM> ::= SYMBOL | INT | FLOAT | STRING | NIL | T | Left-PAREN Right-PAREN
+            if (type == SYMBOL || type == INT || type == FLOAT || type == STRING || type == NIL || type == T) // || type == Left_PAREN || type == Right_PAREN
+                return true;
+            // QUOTE、DOT
             return false;
-        // + or -
-        else if (str.size() == 1 && (str == "+" || str == "-"))
-            return false;
-
-        string tmp = str;
-        int i = 0;
-        while (i < str.size()) {
-            // + or - appear at the first character
-            if (i == 0 && (str.at(0) == '+' || str.at(0) == '-')) {
-                if (str.at(0) == '+')
-                    tmp = str.substr(1); // Remove the '+' sign from the string
-                cerr << "int str tmp: " << tmp << endl;
-                
-                i++;
-                continue;
-            }
-            if (!isdigit(str.at(i)))
-                return false;
-            i++;
         }
-
-        str = tmp;
-        // cerr << "END : int str: " << str << endl;
-        return true;
-    }
-
-    bool is_float(string &str) {
-        if (str.empty())
+    
+        bool is_s_exp(Token &token) {
+            // bool legal = true;
+            if (is_ATOM(token.type)) 
+                return true;
+            else if (token.type == QUOTE || token.type == Left_PAREN || token.type == Right_PAREN) 
+                return true;
+    
             return false;
-
-        string tmp = str;
-        string sign = "";
-        int i = 0;
-        int dot_count = 0;
-        // - or +
-        if (str.size() == 1 && (str.at(0) == '+' || str.at(0) == '-'))
-            return false;
-        // -. or +.
-        else if (str == "-." || str == "+.")
-            return false;
-
-        while (i < str.size()) {
-            if (i == 0 && (str.at(0) == '+' || str.at(0) == '-')) {
-                sign = str.at(0); // save the sign
-                tmp = str.substr(1); // Remove the sign from the string
-                // i++;
-                // continue;
-            }
-            else if (str[i] == '.') {
-                dot_count++;
-                if (dot_count > 1)
-                    return false;
-                if (i == 0 || !isdigit(str[i - 1]))
-                    tmp.insert(tmp.begin(), '0'); // Insert '0' before the dot if no digit before it
-                // i++;
-                // continue;
-            }
-            else if (!isdigit(str[i]) && str[i] != '.')
-                return false;
-            i++;
         }
-        
-        // 四捨五入到小數點後第三位
-        float float_value = stof(tmp);
-        cout << "float_value: " << float_value << endl;
-        float_value = round(float_value * 1000.0) / 1000.0;
-        tmp = to_string(float_value);
-
-        // 小數點後大於三位數, 只取到小數點後第三位
-        int dot_pos = tmp.find('.');
-        if (tmp.size() - dot_pos > 4)
-            tmp = tmp.substr(0, dot_pos + 4);
-
-        if (sign == "-")
-            tmp = sign + tmp;
-
-        str = tmp;
-        // cerr << "END : float str: " << str << endl;
-        return true;
-    }
-
-    TokenType check_token_type(string &str) {
-        TokenType type;
-        if (str == "") // str == "NIL" || str == "nil" || 
-            type = NIL;
-        else if (str == "T")
-            type = T;
-        else if (str == "'" || str == "QUOTE")
-            type = QUOTE;
-        else if (str == "(") 
-            type = Left_PAREN;
-        else if (str == ")") 
-            type = Right_PAREN;
-        else if (str == ".") 
-            type = DOT;
-        else if (is_int(str))
-            type = INT;
-        else if (is_float(str))
-            type = FLOAT;
-        else if (str[0] == '\"')
-            type = STRING;
-        else
-            type = SYMBOL;
-
-        return type;
-    }
-
-    void read_whole_string(string &tmpstr, errorType &error, char start_char) {
-        char c_peek = cin.peek();
-
-        if (start_char == ';') {
-            while(!is_enter(c_peek) && c_peek != EOF) {
-                // c_peek = cin.peek();
-                if (c_peek == EOF) {
-                    error = UNEXPECTED_EOF;
-                    // return;
-                }
-                else{
-                    tmpstr.push_back(getchar());
-                    reset_Line_And_Column(line, column+1); // column++;
-                }
-                
-                c_peek = cin.peek();
-            }
-            if (c_peek == EOF) {
-                error = UNEXPECTED_EOF;
-                return;
-            }
-            else if (is_enter(c_peek) && leftParen!=rightParen) {
-                getchar(); // ignore '\n'
-                reset_Line_And_Column(line+1, 1);
-            }
-            else {
-                getchar(); // ignore '\n'
-                reset_Line_And_Column(1, 1);
-            }
+    
+        void renew_dot_appear(TokenType t, int level) {
+            for (; currnt_level <= level; currnt_level++)
+                dot_appear.push_back({currnt_level, false});
             
+    
+            // cout << "start loop" << endl;
+            // for (int i = 0; i < dot_appear.size(); i++) {
+            //     cout << "level: " << dot_appear.at(i).first << " appear: " << dot_appear.at(i).second << endl;
+            // }
+            // cout << "end loop" << endl;
+    
+            // if (currnt_level < level) {
+            //     currnt_level = level;
+            //     dot_appear.push_back({level, false});
+            // }
+    
+            if (t == DOT)
+                dot_appear.at(level).second = true;
         }
-        else if (start_char == '\"') {
-            tmpstr.push_back(getchar()); // push_back first "
-            reset_Line_And_Column(line, column+1);
-            c_peek = cin.peek();
-            while(c_peek!= '\"') {
-                
-                if (c_peek == EOF) {
-                    error = UNEXPECTED_EOF;
-                    return;
-                }
-                else if (is_enter(c_peek)) {
-                    // reset_Line_And_Column(line, column+1); // ! ???????
-                    error = UNEXPECTED_STRING;
-                    // string trash;
-                    // getline(cin, trash); // ignore the whole line
-                    return;
-                }
-                tmpstr.push_back(getchar()); // push_back the char in the string
-                reset_Line_And_Column(line, column+1);
-                c_peek = cin.peek();
-            }
-            tmpstr.push_back(getchar()); // push_back second "
-            reset_Line_And_Column(line, column+1);
-
-            // make sure don't follow \n
-            c_peek = cin.peek();
-            if (is_enter(c_peek))
-                getchar(); // ignore '\n'
+    
+        bool check_dot_appear(int level) {
+            int size = dot_appear.size();
+            if (level == size)  // 目前 level=0 時，若 size=0 表當前 level 還未進入過，且未出現過 dot
+                dot_appear.push_back({level, false}); // 進入當前 level
             
-        }
-        else
-            cerr << "\033[1;31munknown error in read_whole_string\033[0m" << endl;
-    }
-
-    void print_token(Token &t) {
-        for(auto &c : t.value) {
-            if (c == ' ')
-                cerr << " ";
+            else if (level < size)  // check whether dot appear in current level or not
+                return dot_appear.at(level).second;
             else
-                cerr << c;
+                cerr << "\033[1;31mundefined error\033[0m" << endl;
+            
+            return false;
         }
-        cerr << " line: " << t.line << " ";
-        cerr << "column: " << t.column << " ";
-        cerr << "level: " << t.level << " ";
-        cerr << "type: ";
-        switch (t.type) {
-            case INT: cerr << "INT"; break;
-            case FLOAT: cerr << "FLOAT"; break;
-            case STRING: cerr << "STRING"; break;
-            case Left_PAREN: cerr << "Left_PAREN"; break;
-            case Right_PAREN: cerr << "Right_PAREN"; break;
-            case DOT: cerr << "DOT"; break;
-            case NIL: cerr << "NIL"; break;
-            case T: cerr << "T"; break;
-            case QUOTE: cerr << "QUOTE"; break;
-            case SYMBOL: cerr << "SYMBOL"; break;
-            default: cerr << "UNKNOWN"; break;
-        }
-        cerr << " \n";
-    }
-    void print_vector(vector<Token> &v) {
-        cerr << "\033[1;34menter print_vector\033[0m" << endl;
-        for (int i = 0; i < v.size(); i++)
-            print_token(v.at(i));
-        cerr << "\033[1;34mend print_vector\033[0m" << endl;
-    }
-
-    void set_token_line_and_column(Token &tmptoken, int l, int c, string str) {
-        tmptoken.value = str;
-        tmptoken.type = check_token_type(tmptoken.value);
-        tmptoken.line = l;
-        tmptoken.column = c;
-        if (tmptoken.value == "(")
-            tmptoken.level = level - 1; // level 從0開始
-        else
-            tmptoken.level = level;
-    }
-
-    void reset_error_info() {
-        reset_Line_And_Column(1, 1);
-        leftParen = 0;
-        rightParen = 0;
-        level = 0;
-        error_line = 0;
-        error_column = 0;
-        // ExpectedToken = "";
-        // CurrentToken = "";
-        // is_EOF = false;
-    }
-
-    void handle_error(errorType e, char c_peek) {
-        Error error;
-        string current = tokenBuffer.back().value;
-        int error_line = tokenBuffer.back().line;
-        int error_column = tokenBuffer.back().column;
-
-        if (e != UNEXPECTED_EOF && !is_enter(c_peek)) {
-            string trash;
-            getline(cin, trash); // ignore the whole line
-            cerr << "\033[1;33mthrow trash: " << trash << "\033[0m" << endl;
-        }
-        switch (e) {
-            case UNEXPECTED_TOKEN:
-                error = Error(e, "atom or '('", current, error_line, error_column);
-                break;
-            case UNEXPECTED_CLOSE_PAREN:
-                error = Error(e, "atom or '('", current, error_line, error_column);
-                break;
-            case UNEXPECTED_END_PAREN:
-                error = Error(e, "')'", current, error_line, error_column);
-                break;
-            case UNEXPECTED_STRING:
-                error = Error(e, "unset yet", current, error_line, error_column);
-                break;
-            case UNEXPECTED_EOF:
-                is_EOF = true;
-                // cerr << "2. throw error UNEXPECTED_EOF" << endl;
-                error = Error(e, "eof", "eof", 0, 0);
-                break;
-            case UNEXPECTED_EXIT:
-                error = Error(e, "exit", "exit", 0, 0);
-                break;
-            default:
-                break;
-        }
-        throw error;
-    }
     
-public:
-    vector<Token> tokenBuffer; // 暫存read data，去掉" "、"\n"、"\t"、""、    ?"\r"
-    LexicalAnalyzer() {
-        reset_Line_And_Column(1, 1);
-        level = 0;
-        is_EOF = false;
-        // ExpectedToken("");
-        // CurrentToken("");
-    }
-
-    string Get_Str(char &c_peek, Token &tmptoken, errorType &error, bool end = false) {
-        // int leftCount = 0, rightCount = 0; // count '(' and ')'
-        string str = "";
-        char c = '\0';
-        // char c_peek = '\0';
-        
-        while (!end) {
-            c_peek = cin.peek(); // peek the next char
-            if (c_peek == EOF) {
-                // cerr << "1. throw error UNEXPECTED_EOF" << endl;
-                error = UNEXPECTED_EOF;
-                set_token_line_and_column(tmptoken, 0, 0, "eof");
-                return "eof";
-            }
-            // 如果目前str內有symbol，下個讀入的如果是特殊字元，則先回傳當前str作為token
-            if (!str.empty() && is_special_symbol(c_peek)) {
-                set_token_line_and_column(tmptoken, line, column-str.size(), str);
-                // 若下個字元是換行符
-                if (is_enter(c_peek)){
-                    getchar(); // skip the char of '\n'
-                    reset_Line_And_Column(line+1, 1);
-                }
-                return str;
-            }
+    public:
+        SyntaxAnalyzer() {
+            currnt_level = 0;
+            // dot_appear.push_back({0, false});
+        }
+    
+        void build_tree(vector<Token> &v) {
             
-            // not UNEXPECTED_EOF
-            // handle whitespace, tab
-            else if (is_space(c_peek)) {
-                getchar(); // skip the char of ' ', '\t'
-                reset_Line_And_Column(line, column+1);
-
-                set_token_line_and_column(tmptoken, line, column-str.size(), " ");
-
-                end = true;
-                continue;
-            }
-            // handle enter
-            else if (is_enter(c_peek)) {
-                getchar(); // skip the char of '\n'
-                reset_Line_And_Column(line, column+1);
-                set_token_line_and_column(tmptoken, line, column-str.size(), "\n");
-
-                reset_Line_And_Column(line+1, 1);
+            tree.build_AST(v);
+            // tree.print();
+            // tree.clear_tree(tree.get_root());
+            
+            
+        }
+    
+        void check_syntax(vector<Token> &tokenBuffer, errorType &error) {
+            int token_size = tokenBuffer.size();
+    
+            // cerr << "\033[1;34menter check_syntax\033[0m" << endl;
+            // cerr << "tokenBuffer.size(): " << tokenBuffer.size() << endl;
+            if (tokenBuffer.size() == 1) {
+                // cerr << "tokenBuffer.size() == 1" << endl;
+                // . 
+                if (!is_ATOM(tokenBuffer.at(0).type) && tokenBuffer.at(0).type != QUOTE  && tokenBuffer.at(0).type != Left_PAREN) {
+                    // cerr << "tokenBuffer.at(0).type: " << tokenBuffer.at(0).type << endl;
+                    error = UNEXPECTED_TOKEN;
+                }
                 
-                end = true;
-                continue;
+                
             }
-            // handle the parentheses
-            else if (is_PAREN(c_peek, end)) {
-                str.push_back(getchar()); // push_back the '(' or ')'
-                reset_Line_And_Column(line, column+1); // column++;
-                set_token_line_and_column(tmptoken, line, column-str.size(), str);
-                if (rightParen > leftParen) {
-                    error = UNEXPECTED_CLOSE_PAREN;
-                    // return str;
+            else if (token_size > 1) {
+                // cerr << "token_size > 1" << endl;
+                int index_curr = token_size - 1;
+                int index_prev = token_size - 2;
+                if (tokenBuffer.at(index_prev).value == "\'" && !is_s_exp(tokenBuffer.at(index_curr))) {
+                    error = UNEXPECTED_TOKEN;
                 }
-                // return str;
-            }
-            // handle comment, Semicolon(;)
-            // ! meet eof not finish
-            else if (is_comment(c_peek)) {
-                string comment = "";
-                read_whole_string(comment, error, ';');
-                cerr << "\033[1;32mcomment: " << comment << "\033[0m" << endl;
-
-                if (error == UNEXPECTED_EOF) {
-                    set_token_line_and_column(tmptoken, 0, 0, "eof");
-                    return "eof";
+    
+                // DOT
+                if (tokenBuffer.at(index_curr).type == DOT) {
+                    // DOT 前後必須是完整 ATOM 或是 S-EXP
+                    // 避免 ('. or (. 
+                    if (tokenBuffer.at(index_prev).type == QUOTE || tokenBuffer.at(index_prev).type == Left_PAREN)
+                        error = UNEXPECTED_TOKEN;
+                    if (check_dot_appear(tokenBuffer.at(index_curr).level) == true) 
+                        error = UNEXPECTED_END_PAREN;
+    
                 }
-            
+                // right Paren
+                if (tokenBuffer.at(index_curr).type == Right_PAREN) {
+                    // Right_PAREN 前必須是完整 ATOM 或是 S-EXP
+                    // 避免 ') or .) 
+                    if (tokenBuffer.at(index_prev).type == QUOTE || tokenBuffer.at(index_prev).type == DOT) {
+                        error = UNEXPECTED_TOKEN;
+                    }
+                    // () 時, 改成(nil)
+                    /*if (tokenBuffer.at(index_prev).type == Left_PAREN) {
+                        Token nil_token;
+                        nil_token.type = NIL;
+                        nil_token.value = "nil";
+                        nil_token.line = tokenBuffer.at(index_prev).line;
+                        nil_token.column = tokenBuffer.at(index_prev).column + 1;
+                        nil_token.level = tokenBuffer.at(index_prev).level + 1;
+                        tokenBuffer.insert(tokenBuffer.begin() + index_curr, nil_token);
+                        index_curr++;
+                    }*/
+                }
+                renew_dot_appear(tokenBuffer.at(index_curr).type, tokenBuffer.at(index_curr).level);
             }
-            // handle double quote
-            // ! meet eof not finish
-            else if (c_peek == '\"') {
-                read_whole_string(str, error, '\"');
-                if (error == UNEXPECTED_EOF) {
-                    cerr << "\033[1;31mUNEXPECTED_EOF  str: " << str << "\033[0m" << endl;
+    
+            // cerr << "\033[1;34mend check_syntax\033[0m" << endl;
+        }
+    
+        void print_space(int n) {
+            for (int i = 0; i < n; i++)
+                cout << " ";
+        }
+    
+        void pretty_print(vector<Token> &tokenBuffer) {
+            int level = 0;
+            cerr << "\033[1;34menter pretty_print\033[0m" << endl;
+            for (int i = 0; i < tokenBuffer.size(); i++) {
+                Token current_Token = tokenBuffer.at(i);
+                if (current_Token.type == Left_PAREN) {
+                    print_space(level);
+                    cout << "( " ;
+                    level++;
+                }
+                else if (current_Token.type == Right_PAREN) {
+                    level--;
+                    print_space(level);
+                    cout << ")" << endl;
+                }
+                else {
+                    // print_space(level);
+                    cout << current_Token.value << endl;
+                }
+            }
+            cerr << "\033[1;34mend pretty_print\033[0m" << endl;
+        }
+    
+        ~SyntaxAnalyzer() {
+    
+        }
+    
+    
+    };
+    
+    class LexicalAnalyzer {
+    private:
+        
+        int line, column; // '(" ", "\t"， "\")保留
+        int leftParen = 0, rightParen = 0; // count '(' and ')'
+        int level;
+        bool is_EOF;
+        // bool dot_appear = false;
+        // pair<bool, bool> dot_appear = {false, false}; // first: is_dot, second: enter the second atom
+    
+        int error_line, error_column;
+        // string ExpectedToken, CurrentToken;
+    
+        void reset_Line_And_Column(int l, int c) {
+            line = l;
+            column = c;
+            // cerr << "reset line: " << g_line << " column: " << g_column << endl;
+        }
+    
+        bool is_space(char token) { // check whether the token is ' ' or '\t'
+            if (token == ' ' || token == '\t')
+                return true;
+            return false;
+        }
+    
+        bool is_enter(char token) { // check whether the token is '\n' or '\r'
+            if (token == '\n' || token == '\r')
+                return true;
+            return false;
+        }
+    
+        bool is_PAREN(char token, bool &finish_input) { // check whether the token is '(' or ')'
+            bool is_PAREN = false;
+    
+            if (token == '(' || token == ')') {
+                is_PAREN = true;
+                if (token == '(') {// count '('
+                    leftParen++;
+                    level++;
+                }
+                else {// count ')'
+                    rightParen++;
+                    level--;
+                }
+            }
+    
+            return is_PAREN;
+        }
+        
+        bool is_comment(char token ) {
+            if ( token == ';' )
+                return true;
+            return false;
+        }
+    
+        bool is_special_symbol(char token) {
+            if (token == '(' || token == ')' || token == '\'' || token == '\"' || token == ';' || token == ' ' || token == '\t' || token == '\n' || token == '\r' || token == EOF)
+                return true;
+            return false;
+        }
+    
+        bool is_int(string &str) {
+            if (str.empty())
+                return false;
+            // + or -
+            else if (str.size() == 1 && (str == "+" || str == "-"))
+                return false;
+    
+            string tmp = str;
+            int i = 0;
+            while (i < str.size()) {
+                // + or - appear at the first character
+                if (i == 0 && (str.at(0) == '+' || str.at(0) == '-')) {
+                    if (str.at(0) == '+')
+                        tmp = str.substr(1); // Remove the '+' sign from the string
+                    cerr << "int str tmp: " << tmp << endl;
+                    
+                    i++;
                     continue;
                 }
-                else if (error == UNEXPECTED_STRING) {
-                    // error = UNEXPECTED_STRING;
-                    set_token_line_and_column(tmptoken, line, column, str);
-                    return str;
+                if (!isdigit(str.at(i)))
+                    return false;
+                i++;
+            }
+    
+            str = tmp;
+            // cerr << "END : int str: " << str << endl;
+            return true;
+        }
+    
+        bool is_float(string &str) {
+            if (str.empty())
+                return false;
+    
+            string tmp = str;
+            string sign = "";
+            int i = 0;
+            int dot_count = 0;
+            // - or +
+            if (str.size() == 1 && (str.at(0) == '+' || str.at(0) == '-'))
+                return false;
+            // -. or +.
+            else if (str == "-." || str == "+.")
+                return false;
+    
+            while (i < str.size()) {
+                if (i == 0 && (str.at(0) == '+' || str.at(0) == '-')) {
+                    sign = str.at(0); // save the sign
+                    tmp = str.substr(1); // Remove the sign from the string
+                    // i++;
                     // continue;
                 }
-                // str.push_back(getchar()); // push_back the first "
-                // column++;
-                set_token_line_and_column(tmptoken, line, column-str.size(), str);
-                end = true;
-                continue;
-
-            }
-            // handle quote
-            else if (c_peek == '\'') {
-                str.push_back(getchar()); // push_back the first "
-                // level++;
-                reset_Line_And_Column(line, column+1); // column++;
-                set_token_line_and_column(tmptoken, line, column-str.size(), str);
-                return str;
-            }
-            // handle other string
-            // ! meet eof not finish
-            else{
-                if (str == "(" || str == ")") 
-                    return str;
-                str.push_back(getchar());
-                reset_Line_And_Column(line, column+1); // column++;
-            }
-           
-        }
-
-        if (str.empty())
-            // cout << "\033[1;32m----------empty-----------\033[0m" << endl;
-            return Get_Str(c_peek, tmptoken, error);
-        
-        else
-            return str;
-        
-    }
-
-    void Get_Token(bool &finish_input, errorType &error, bool return_when_end = false) {
-        Token tmptoken;
-        string tmpstr = "";
-        vector<pair<int, bool>> dot_appear;
-        SyntaxAnalyzer syntax;
-
-        char c_peek = '\0';
-        do {
-            try {
-                // int tmp_line = line;
-                // int tmp_column = column;
-                tmpstr = Get_Str(c_peek, tmptoken, error); // get the string from cin
-                if (tmpstr == "#f")
-                    tmptoken.value = "nil";
-                
-                // cerr << "tmpstr: " << tmptoken.value << endl;
-                tokenBuffer.push_back(tmptoken);
-                
-                // cerr << "\033[1;31m1. error: " << error << "\033[0m" << endl;
-                
-                // no error, judge the syntax
-                if (error == Error_None) {
-                    syntax.check_syntax(tokenBuffer, error);
+                else if (str[i] == '.') {
+                    dot_count++;
+                    if (dot_count > 1)
+                        return false;
+                    if (i == 0 || !isdigit(str[i - 1]))
+                        tmp.insert(tmp.begin(), '0'); // Insert '0' before the dot if no digit before it
+                    // i++;
+                    // continue;
                 }
-
-                
-                // if (tokenBuffer)
-                // ! print test
-                if (error != Error_None) {
-                    // cerr << "\033[1;31m2. error: " << error << "\033[0m" << endl;
-                    print_vector(tokenBuffer);
-                    throw error;
-                }
-                
-            }
-            catch (errorType error) {
-                // ! when error occur, finish Get_Token(), go to main() print error message
-                finish_input = true;
-                
-                handle_error(error, c_peek);
-                // return; // ! return when error occur, go to main() print error message
+                else if (!isdigit(str[i]) && str[i] != '.')
+                    return false;
+                i++;
             }
             
-            if (tokenBuffer.size() == 1 && tokenBuffer.at(0).type == QUOTE)
-                finish_input = false;
-            else if ((level == 0 && tokenBuffer.size() > 0) || (leftParen != 0 && leftParen == rightParen))
-                finish_input = true;
-            
-        }
-        while(!finish_input);
-
-        // ! print test
-        print_vector(tokenBuffer);
-    }
-
-    bool Get_is_EOF(){
-        return is_EOF;
-    }
-
-    void reset() {
-        tokenBuffer.clear();
-        reset_error_info();
-    }
-
-    ~LexicalAnalyzer() {
-        reset();
-    }
-};
-
-int main() {
-    LexicalAnalyzer Lexical; //詞法分析器
-    bool is_Syntax_legal = true;
-    SyntaxAnalyzer Syntax; //語法分析器
-
-    string expr, input;
-    int line, column = 0;
-    Node_Token *head = nullptr;
-    Node_Token *tail = nullptr;
-
-    // clear the cin buffer
-    cin.clear();
-    cin.ignore(1024,'\n');
-
-    cout << "Welcome to OurScheme!" << endl;
+            // 四捨五入到小數點後第三位
+            float float_value = stof(tmp);
+            cout << "float_value: " << float_value << endl;
+            float_value = round(float_value * 1000.0) / 1000.0;
+            tmp = to_string(float_value);
     
-    while (!Lexical.Get_is_EOF()) { // while (true)
-        bool finish_input = false;
-        try {
-            cout << "\n> ";
-            errorType E = Error_None;
-            Lexical.Get_Token(finish_input, E);
-
-            if (finish_input) {
-                // cerr << "\033[1;32mfinish_input\033[0m" << endl;
-                // bulid parser tree
-                Syntax.build_tree(Lexical.tokenBuffer);
-
-                // Syntax.pretty_print(Lexical.tokenBuffer);
-
-                // reset lexical vector
-                Lexical.reset();
+            // 小數點後大於三位數, 只取到小數點後第三位
+            int dot_pos = tmp.find('.');
+            if (tmp.size() - dot_pos > 4)
+                tmp = tmp.substr(0, dot_pos + 4);
+    
+            if (sign == "-")
+                tmp = sign + tmp;
+    
+            str = tmp;
+            // cerr << "END : float str: " << str << endl;
+            return true;
+        }
+    
+        TokenType check_token_type(string &str) {
+            TokenType type;
+            if (str == "#f") // str == "NIL" || str == "nil" || 
+                type = NIL;
+            else if (str == "T")
+                type = T;
+            else if (str == "'" || str == "QUOTE")
+                type = QUOTE;
+            else if (str == "(") 
+                type = Left_PAREN;
+            else if (str == ")") 
+                type = Right_PAREN;
+            else if (str == ".") 
+                type = DOT;
+            else if (is_int(str))
+                type = INT;
+            else if (is_float(str))
+                type = FLOAT;
+            else if (str[0] == '\"')
+                type = STRING;
+            else
+                type = SYMBOL;
+    
+            return type;
+        }
+    
+        void read_whole_string(string &tmpstr, errorType &error, char start_char) {
+            char c_peek = cin.peek();
+    
+            if (start_char == ';') {
+                while(!is_enter(c_peek) && c_peek != EOF) {
+                    // c_peek = cin.peek();
+                    if (c_peek == EOF) {
+                        error = UNEXPECTED_EOF;
+                        // return;
+                    }
+                    else{
+                        tmpstr.push_back(getchar());
+                        reset_Line_And_Column(line, column+1); // column++;
+                    }
+                    
+                    c_peek = cin.peek();
+                }
+                if (c_peek == EOF) {
+                    error = UNEXPECTED_EOF;
+                    return;
+                }
+                else if (is_enter(c_peek) && leftParen!=rightParen) {
+                    getchar(); // ignore '\n'
+                    reset_Line_And_Column(line+1, 1);
+                }
+                else {
+                    getchar(); // ignore '\n'
+                    reset_Line_And_Column(1, 1);
+                }
+                
             }
-
-        } catch (Error e) {
-            switch (e.type) {
+            else if (start_char == '\"') {
+                tmpstr.push_back(getchar()); // push_back first "
+                reset_Line_And_Column(line, column+1);
+                c_peek = cin.peek();
+                while(c_peek!= '\"') {
+                    
+                    if (c_peek == EOF) {
+                        error = UNEXPECTED_EOF;
+                        return;
+                    }
+                    else if (is_enter(c_peek)) {
+                        // reset_Line_And_Column(line, column+1); // ! ???????
+                        error = UNEXPECTED_STRING;
+                        // string trash;
+                        // getline(cin, trash); // ignore the whole line
+                        return;
+                    }
+                    tmpstr.push_back(getchar()); // push_back the char in the string
+                    reset_Line_And_Column(line, column+1);
+                    c_peek = cin.peek();
+                }
+                tmpstr.push_back(getchar()); // push_back second "
+                reset_Line_And_Column(line, column+1);
+    
+                // make sure don't follow \n
+                c_peek = cin.peek();
+                if (is_enter(c_peek))
+                    getchar(); // ignore '\n'
+                
+            }
+            else
+                cerr << "\033[1;31munknown error in read_whole_string\033[0m" << endl;
+        }
+    
+        void print_token(Token &t) {
+            // for(auto &c : t.value) {
+            //     if (c == ' ')
+            //         cerr << " ";
+            //     else
+            //         cerr << c;
+            // }
+            cerr << "value: " << t.value << " ";
+            cerr << " line: " << t.line << " ";
+            cerr << "column: " << t.column << " ";
+            cerr << "level: " << t.level << " ";
+            cerr << "type: ";
+            switch (t.type) {
+                case INT: cerr << "INT"; break;
+                case FLOAT: cerr << "FLOAT"; break;
+                case STRING: cerr << "STRING"; break;
+                case Left_PAREN: cerr << "Left_PAREN"; break;
+                case Right_PAREN: cerr << "Right_PAREN"; break;
+                case DOT: cerr << "DOT"; break;
+                case NIL: cerr << "NIL"; break;
+                case T: cerr << "T"; break;
+                case QUOTE: cerr << "QUOTE"; break;
+                case SYMBOL: cerr << "SYMBOL"; break;
+                default: cerr << "UNKNOWN"; break;
+            }
+            cerr << " \n";
+        }
+        void print_vector(vector<Token> &v) {
+            cerr << "\033[1;34menter print_vector\033[0m" << endl;
+            for (int i = 0; i < v.size(); i++)
+                print_token(v.at(i));
+            cerr << "\033[1;34mend print_vector\033[0m" << endl;
+        }
+    
+        void set_token_line_and_column(Token &tmptoken, int l, int c, string str) {
+            tmptoken.value = str;
+            tmptoken.type = check_token_type(tmptoken.value);
+            tmptoken.line = l;
+            tmptoken.column = c;
+            if (tmptoken.value == "(")
+                tmptoken.level = level - 1; // level 從0開始
+            else
+                tmptoken.level = level;
+        }
+    
+        void reset_error_info() {
+            reset_Line_And_Column(1, 1);
+            leftParen = 0;
+            rightParen = 0;
+            level = 0;
+            error_line = 0;
+            error_column = 0;
+            // ExpectedToken = "";
+            // CurrentToken = "";
+            // is_EOF = false;
+        }
+    
+        void handle_error(errorType e, char c_peek) {
+            Error error;
+            string current = tokenBuffer.back().value;
+            int error_line = tokenBuffer.back().line;
+            int error_column = tokenBuffer.back().column;
+    
+            if (e != UNEXPECTED_EOF && !is_enter(c_peek)) {
+                string trash;
+                getline(cin, trash); // ignore the whole line
+                cerr << "\033[1;33mthrow trash: " << trash << "\033[0m" << endl;
+            }
+            switch (e) {
                 case UNEXPECTED_TOKEN:
-                    // cerr << "\033[1;31m" << "UNEXPECTED_TOKEN" << "\033[0m" << endl;
-                    cout << "\033[1;31m" << e.message << "\033[0m" << endl;
-                    Lexical.reset();
+                    error = Error(e, "atom or '('", current, error_line, error_column);
                     break;
                 case UNEXPECTED_CLOSE_PAREN:
-                    // cerr << "\033[1;31m" << "UNEXPECTED_CLOSE_PAREN" << "\033[0m" << endl;
-                    cout << "\033[1;31m" << e.message << "\033[0m" << endl;
-                    Lexical.reset();
+                    error = Error(e, "atom or '('", current, error_line, error_column);
                     break;
                 case UNEXPECTED_END_PAREN:
-                    // cerr << "\033[1;31m" << "UNEXPECTED_END_PAREN" << "\033[0m" << endl;
-                    cout << "\033[1;31m" << e.message << "\033[0m" << endl;
-                    Lexical.reset();
+                    error = Error(e, "')'", current, error_line, error_column);
                     break;
                 case UNEXPECTED_STRING:
-                    // cerr << "\033[1;31m" << "UNEXPECTED_STRING" << "\033[0m" << endl;
-                    cout << "\033[1;31m" << e.message << "\033[0m" << endl;
-                    Lexical.reset();
+                    error = Error(e, "unset yet", current, error_line, error_column);
                     break;
                 case UNEXPECTED_EOF:
-                    // cerr << "\033[1;31m" << "UNEXPECTED_EOF" << "\033[0m" << endl;
-                    cout << "\033[1;31m" << e.message << "\033[0m" << endl;
-                    Lexical.reset();
+                    is_EOF = true;
+                    // cerr << "2. throw error UNEXPECTED_EOF" << endl;
+                    error = Error(e, "eof", "eof", 0, 0);
                     break;
                 case UNEXPECTED_EXIT:
-                    Lexical.reset();
+                    error = Error(e, "exit", "exit", 0, 0);
                     break;
                 default:
                     break;
             }
+            throw error;
         }
         
-    }
+    public:
+        vector<Token> tokenBuffer; // 暫存read data，去掉" "、"\n"、"\t"、""、    ?"\r"
+        LexicalAnalyzer() {
+            reset_Line_And_Column(1, 1);
+            level = 0;
+            is_EOF = false;
+            // ExpectedToken("");
+            // CurrentToken("");
+        }
+    
+        string Get_Str(char &c_peek, Token &tmptoken, errorType &error, bool end = false) {
+            // int leftCount = 0, rightCount = 0; // count '(' and ')'
+            string str = "";
+            char c = '\0';
+            // char c_peek = '\0';
+            
+            while (!end) {
+                c_peek = cin.peek(); // peek the next char
+                if (c_peek == EOF) {
+                    // cerr << "1. throw error UNEXPECTED_EOF" << endl;
+                    error = UNEXPECTED_EOF;
+                    set_token_line_and_column(tmptoken, 0, 0, "eof");
+                    return "eof";
+                }
+                // 如果目前str內有symbol，下個讀入的如果是特殊字元，則先回傳當前str作為token
+                if (!str.empty() && is_special_symbol(c_peek)) {
+                    set_token_line_and_column(tmptoken, line, column-str.size(), str);
+                    // 若下個字元是換行符
+                    if (is_enter(c_peek)){
+                        getchar(); // skip the char of '\n'
+                        reset_Line_And_Column(line+1, 1);
+                    }
+                    return str;
+                }
+                
+                // not UNEXPECTED_EOF
+                // handle whitespace, tab
+                else if (is_space(c_peek)) {
+                    getchar(); // skip the char of ' ', '\t'
+                    reset_Line_And_Column(line, column+1);
+    
+                    set_token_line_and_column(tmptoken, line, column-str.size(), " ");
+    
+                    end = true;
+                    continue;
+                }
+                // handle enter
+                else if (is_enter(c_peek)) {
+                    getchar(); // skip the char of '\n'
+                    reset_Line_And_Column(line, column+1);
+                    set_token_line_and_column(tmptoken, line, column-str.size(), "\n");
+    
+                    reset_Line_And_Column(line+1, 1);
+                    
+                    end = true;
+                    continue;
+                }
+                // handle the parentheses
+                else if (is_PAREN(c_peek, end)) {
+                    str.push_back(getchar()); // push_back the '(' or ')'
+                    reset_Line_And_Column(line, column+1); // column++;
+                    set_token_line_and_column(tmptoken, line, column-str.size(), str);
+                    if (rightParen > leftParen) {
+                        error = UNEXPECTED_CLOSE_PAREN;
+                        // return str;
+                    }
+                    // return str;
+                }
+                // handle comment, Semicolon(;)
+                // ! meet eof not finish
+                else if (is_comment(c_peek)) {
+                    string comment = "";
+                    read_whole_string(comment, error, ';');
+                    cerr << "\033[1;32mcomment: " << comment << "\033[0m" << endl;
+    
+                    if (error == UNEXPECTED_EOF) {
+                        set_token_line_and_column(tmptoken, 0, 0, "eof");
+                        return "eof";
+                    }
+                
+                }
+                // handle double quote
+                // ! meet eof not finish
+                else if (c_peek == '\"') {
+                    read_whole_string(str, error, '\"');
+                    if (error == UNEXPECTED_EOF) {
+                        cerr << "\033[1;31mUNEXPECTED_EOF  str: " << str << "\033[0m" << endl;
+                        continue;
+                    }
+                    else if (error == UNEXPECTED_STRING) {
+                        // error = UNEXPECTED_STRING;
+                        set_token_line_and_column(tmptoken, line, column, str);
+                        return str;
+                        // continue;
+                    }
+                    // str.push_back(getchar()); // push_back the first "
+                    // column++;
+                    set_token_line_and_column(tmptoken, line, column-str.size(), str);
+                    end = true;
+                    continue;
+    
+                }
+                // handle quote
+                else if (c_peek == '\'') {
+                    str.push_back(getchar()); // push_back the first "
+                    // level++;
+                    reset_Line_And_Column(line, column+1); // column++;
+                    set_token_line_and_column(tmptoken, line, column-str.size(), str);
+                    return str;
+                }
+                // handle other string
+                // ! meet eof not finish
+                else{
+                    if (str == "(" || str == ")") 
+                        return str;
+                    str.push_back(getchar());
+                    reset_Line_And_Column(line, column+1); // column++;
+                }
+               
+            }
+    
+            if (str.empty())
+                // cout << "\033[1;32m----------empty-----------\033[0m" << endl;
+                return Get_Str(c_peek, tmptoken, error);
+            
+            else
+                return str;
+            
+        }
+    
+        void Get_Token(bool &finish_input, errorType &error, bool return_when_end = false) {
+            Token tmptoken;
+            string tmpstr = "";
+            vector<pair<int, bool>> dot_appear;
+            SyntaxAnalyzer syntax;
+    
+            char c_peek = '\0';
+            do {
+                try {
+                    // int tmp_line = line;
+                    // int tmp_column = column;
+                    tmpstr = Get_Str(c_peek, tmptoken, error); // get the string from cin
+                    // if (tmpstr == "#f")
+                    //     tmptoken.value = "nil";
+                    
+                    // cerr << "tmpstr: " << tmptoken.value << endl;
+                    tokenBuffer.push_back(tmptoken);
+                    
+                    // cerr << "\033[1;31m1. error: " << error << "\033[0m" << endl;
+                    
+                    // no error, judge the syntax
+                    if (error == Error_None) {
+                        syntax.check_syntax(tokenBuffer, error);
+                    }
+    
+                    
+                    // if (tokenBuffer)
+                    // ! print test
+                    if (error != Error_None) {
+                        // cerr << "\033[1;31m2. error: " << error << "\033[0m" << endl;
+                        print_vector(tokenBuffer);
+                        throw error;
+                    }
+    
+                    if (tokenBuffer.size() >= 2) {
+                        if (tokenBuffer.at(tokenBuffer.size()-2).type == Left_PAREN && tokenBuffer.at(tokenBuffer.size()-1).type == Right_PAREN) {
+                            Token nil_token;
+                            nil_token.type = NIL;
+                            nil_token.value = "#f";
+                            nil_token.line = tokenBuffer.at(tokenBuffer.size()-2).line;
+                            nil_token.column = tokenBuffer.at(tokenBuffer.size()-2).column;
+                            nil_token.level = tokenBuffer.at(tokenBuffer.size()-2).level;
+                            
+                            tokenBuffer.pop_back();
+                            tokenBuffer.pop_back();
+                            tokenBuffer.push_back(nil_token);
+                        }
+                    }
+                    
+                }
+                catch (errorType error) {
+                    // ! when error occur, finish Get_Token(), go to main() print error message
+                    finish_input = true;
+                    
+                    handle_error(error, c_peek);
+                    // return; // ! return when error occur, go to main() print error message
+                }
+                
+                if (tokenBuffer.size() == 1 && tokenBuffer.at(0).type == QUOTE)
+                    finish_input = false;
+                else if ((level == 0 && tokenBuffer.size() > 0) || (leftParen != 0 && leftParen == rightParen))
+                    finish_input = true;
+                
+            }
+            while(!finish_input);
+    
+            // ! print test
+            print_vector(tokenBuffer);
+        }
+    
+        bool Get_is_EOF(){
+            return is_EOF;
+        }
+    
+        void reset() {
+            tokenBuffer.clear();
+            reset_error_info();
+        }
+    
+        ~LexicalAnalyzer() {
+            reset();
+        }
+    };
+    
+    int main() {
+        LexicalAnalyzer Lexical; //詞法分析器
+        bool is_Syntax_legal = true;
+        SyntaxAnalyzer Syntax; //語法分析器
+    
+        string expr, input;
+        int line, column = 0;
+        Node_Token *head = nullptr;
+        Node_Token *tail = nullptr;
+    
+        // clear the cin buffer
+        cin.clear();
+        cin.ignore(1024,'\n');
+    
+        cout << "Welcome to OurScheme!" << endl;
         
-    cout << "Thanks for using OurScheme!" << endl;
-    return 0;
-}
-
-/*
-
-# Step 1: 印出歡迎訊息
-
-Print "Welcome to OurScheme!"
-
-Print "\n"
-
-Print "> "  # 提示使用者輸入
-
-
-
-# Step 2: 進入 REPL 迴圈
-
-Repeat:
-
-    # 讀取使用者輸入的 S-Expression
-
-    expr = ReadSExp()
-
+        while (!Lexical.Get_is_EOF()) { // while (true)
+            bool finish_input = false;
+            try {
+                cout << "\n> ";
+                errorType E = Error_None;
+                Lexical.Get_Token(finish_input, E);
     
-
-    # 如果讀取到 EOF（檔案結尾），跳出迴圈
-
-    If expr == END-OF-FILE:
-
-        Print "ERROR (no more input) : END-OF-FILE encountered"
-
-        Break
-
+                if (finish_input) {
+                    // cerr << "\033[1;32mfinish_input\033[0m" << endl;
+                    // bulid parser tree
+                    Syntax.build_tree(Lexical.tokenBuffer);
     
-
-    # 若使用者輸入的是 '(exit)'，結束迴圈
-
-    If expr == "(exit)":
-
-        Break
-
+                    // Syntax.pretty_print(Lexical.tokenBuffer);
     
-
-    # 格式化並輸出 S-Expression
-
-    PrintSExp(expr)
-
+                    // reset lexical vector
+                    Lexical.reset();
+                }
     
-
-    # 顯示新的提示符號，等待下一次輸入
-
-    Print "> "
-
-
-
-# Step 3: 結束程式
-
-Print "\n"
-
-Print "Thanks for using OurScheme!"
-
-*/
+            } catch (Error e) {
+                switch (e.type) {
+                    case UNEXPECTED_TOKEN:
+                        // cerr << "\033[1;31m" << "UNEXPECTED_TOKEN" << "\033[0m" << endl;
+                        cout << "\033[1;31m" << e.message << "\033[0m" << endl;
+                        Lexical.reset();
+                        break;
+                    case UNEXPECTED_CLOSE_PAREN:
+                        // cerr << "\033[1;31m" << "UNEXPECTED_CLOSE_PAREN" << "\033[0m" << endl;
+                        cout << "\033[1;31m" << e.message << "\033[0m" << endl;
+                        Lexical.reset();
+                        break;
+                    case UNEXPECTED_END_PAREN:
+                        // cerr << "\033[1;31m" << "UNEXPECTED_END_PAREN" << "\033[0m" << endl;
+                        cout << "\033[1;31m" << e.message << "\033[0m" << endl;
+                        Lexical.reset();
+                        break;
+                    case UNEXPECTED_STRING:
+                        // cerr << "\033[1;31m" << "UNEXPECTED_STRING" << "\033[0m" << endl;
+                        cout << "\033[1;31m" << e.message << "\033[0m" << endl;
+                        Lexical.reset();
+                        break;
+                    case UNEXPECTED_EOF:
+                        // cerr << "\033[1;31m" << "UNEXPECTED_EOF" << "\033[0m" << endl;
+                        cout << "\033[1;31m" << e.message << "\033[0m" << endl;
+                        Lexical.reset();
+                        break;
+                    case UNEXPECTED_EXIT:
+                        Lexical.reset();
+                        break;
+                    default:
+                        break;
+                }
+            }
+            
+        }
+            
+        cout << "Thanks for using OurScheme!" << endl;
+        return 0;
+    }
+    
+    /*
+    
+    # Step 1: 印出歡迎訊息
+    
+    Print "Welcome to OurScheme!"
+    
+    Print "\n"
+    
+    Print "> "  # 提示使用者輸入
+    
+    
+    
+    # Step 2: 進入 REPL 迴圈
+    
+    Repeat:
+    
+        # 讀取使用者輸入的 S-Expression
+    
+        expr = ReadSExp()
+    
+        
+    
+        # 如果讀取到 EOF（檔案結尾），跳出迴圈
+    
+        If expr == END-OF-FILE:
+    
+            Print "ERROR (no more input) : END-OF-FILE encountered"
+    
+            Break
+    
+        
+    
+        # 若使用者輸入的是 '(exit)'，結束迴圈
+    
+        If expr == "(exit)":
+    
+            Break
+    
+        
+    
+        # 格式化並輸出 S-Expression
+    
+        PrintSExp(expr)
+    
+        
+    
+        # 顯示新的提示符號，等待下一次輸入
+    
+        Print "> "
+    
+    
+    
+    # Step 3: 結束程式
+    
+    Print "\n"
+    
+    Print "Thanks for using OurScheme!"
+    
+    */

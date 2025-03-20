@@ -177,7 +177,7 @@ class AST_Tree {
         int size = tokenbuffer.size();
         Node_Token *node = new Node_Token;
         Token none_token = set_token("None", None, -1);
-        Token nil_token = set_token("nil", NIL, -1);
+        Token nil_token = set_token("#f", NIL, -1);
 
         if (index > size) {
             cerr << "\033[1;31m2. touch bottom\033[0m" << endl;
@@ -719,7 +719,7 @@ private:
 
     TokenType check_token_type(string &str) {
         TokenType type;
-        if (str == "") // str == "NIL" || str == "nil" || 
+        if (str == "#f") // str == "NIL" || str == "nil"
             type = NIL;
         else if (str == "T")
             type = T;
@@ -809,12 +809,13 @@ private:
     }
 
     void print_token(Token &t) {
-        for(auto &c : t.value) {
-            if (c == ' ')
-                cerr << " ";
-            else
-                cerr << c;
-        }
+        // for(auto &c : t.value) {
+        //     if (c == ' ')
+        //         cerr << " ";
+        //     else
+        //         cerr << c;
+        // }
+        cerr << "value: " << t.value << " ";
         cerr << " line: " << t.line << " ";
         cerr << "column: " << t.column << " ";
         cerr << "level: " << t.level << " ";
@@ -1044,8 +1045,8 @@ public:
                 // int tmp_line = line;
                 // int tmp_column = column;
                 tmpstr = Get_Str(c_peek, tmptoken, error); // get the string from cin
-                if (tmpstr == "#f")
-                    tmptoken.value = "nil";
+                // if (tmpstr == "#f")
+                //     tmptoken.value = "nil";
                 
                 // cerr << "tmpstr: " << tmptoken.value << endl;
                 tokenBuffer.push_back(tmptoken);
@@ -1064,6 +1065,21 @@ public:
                     // cerr << "\033[1;31m2. error: " << error << "\033[0m" << endl;
                     print_vector(tokenBuffer);
                     throw error;
+                }
+
+                if (tokenBuffer.size() >= 2) {
+                    if (tokenBuffer.at(tokenBuffer.size()-2).type == Left_PAREN && tokenBuffer.at(tokenBuffer.size()-1).type == Right_PAREN) {
+                        Token nil_token;
+                        nil_token.type = NIL;
+                        nil_token.value = "#f";
+                        nil_token.line = tokenBuffer.at(tokenBuffer.size()-2).line;
+                        nil_token.column = tokenBuffer.at(tokenBuffer.size()-2).column;
+                        nil_token.level = tokenBuffer.at(tokenBuffer.size()-2).level;
+                        
+                        tokenBuffer.pop_back();
+                        tokenBuffer.pop_back();
+                        tokenBuffer.push_back(nil_token);
+                    }
                 }
                 
             }
