@@ -162,7 +162,6 @@ class AST_Tree {
         return tmp;
     }
 
-    
     Node_Token* set_node(Token token, Node_Token *l, Node_Token *r, Node_Token *p) {
         Node_Token *tmp = new Node_Token();
         tmp->token = token;
@@ -175,17 +174,18 @@ class AST_Tree {
 
     Node_Token* insert(Node_Token *parent, vector<Token> &tokenbuffer, int &index, int level = 0) {
         int size = tokenbuffer.size();
-        Node_Token *node = new Node_Token;
+        Node_Token *node = nullptr;
         Token none_token = set_token("None", None, -1);
         Token nil_token = set_token("#f", NIL, -1);
+        cout << "\033[1;32mindex: " << index << "\033[0m" << endl;
 
         if (index > size) {
-            cerr << "\033[1;31m2. touch bottom\033[0m" << endl;
+            cerr << "\033[1;31m* 2. touch bottom *\033[0m" << endl;
             return nullptr;
         }
         else if (index == size || tokenbuffer.at(index).type == Right_PAREN) {
             // index++;
-            cerr << "\033[1;31m1. touch bottom\033[0m" << endl;
+            cerr << "\033[1;31m* 1. touch bottom *\033[0m" << endl;
             node = set_node(nil_token, nullptr, nullptr, parent);
             return node;
         }
@@ -199,10 +199,11 @@ class AST_Tree {
         // !current_token
         Token current_token = tokenbuffer.at(index);
         cerr << "current_token: " << current_token.value << endl;
-        // index++;
+        index++;
+        cerr << "\033[1;32m" << "index++ " << "\033[0m" << endl;
         // !next_token
         Token next_token;
-        if (index+1 < size) next_token = tokenbuffer.at(index+1);
+        if (index < size) next_token = tokenbuffer.at(index);
         else next_token = set_token("None", None, -1);
         cerr << "next_token: " << next_token.value << endl;
         // *********************************************************
@@ -211,66 +212,89 @@ class AST_Tree {
         // current is s-exp or not
         if (is_s_exp(current_token)) {
             cerr << "\033[1;35mis_s_exp\033[0m" << endl;
+            
             if (current_token.type == Left_PAREN) {
+                //? **************
+                // 當前 node 內會存 "("
                 cerr << "\033[1;35m" << "** current_token.type == Left_PAREN **" << "\033[0m" << endl;
-                index++; // skip "("
-                return insert(parent, tokenbuffer, index);
+                // !
+                if (next_token.type == Right_PAREN) {
+                    cerr << "\033[1;35m" << "** I think will not enter in here **" << "\033[0m" << endl;
+                    // node 設為 nil，並將其 left、right 指向 nullptr，回傳給 parent->left or parent->right
+                    node = set_node(nil_token, nullptr, nullptr, parent); // 為 leaf node，不需再往下 insert
+                    // cerr << "set_node value: " << nil_token.value << endl;
+                    index++; // 回傳給 parent 後 skip 下個 ")"
+                    cerr << "\033[1;32m" << "index++ " << "\033[0m" << endl;
+                    node->parent->right = insert(node->parent, tokenbuffer, index);
+                    
+                }
+                // !
+                // (s-exp)
+                else {
+                    // 當前 node 內會存 "("
+                    node = set_node(current_token, nullptr, nullptr, parent);
+                    node->left = insert(node, tokenbuffer, index);
+                    // index++;
+                    // cerr << "\033[1;32m" << "index++ " << "\033[0m" << endl;
+                    node->right = insert(node, tokenbuffer, index);
+                }
+                
             }
             else if (current_token.type == QUOTE) {
                 cerr << "\033[1;35m" << "** QUOTE **" << "\033[0m" << endl;
-                Token none_token = set_token("None", None, -1);
                 node = set_node(none_token, nullptr, nullptr, parent);
-                //        *. 
-                //      */  \
-                //   *quote 
-                //  */    \
-                // none  none
+                // *                   . 
+                // *                 /  \
+                // *left_quote->  quote *none  <-right_quote
+                // *             /    \
+                // *          null   null
                 Node_Token *left_quote = new Node_Token;
-                current_token.value = "quote";
+                // current_token.value = "quote";
                 left_quote = set_node(current_token, nullptr, nullptr, node);
                 node->left = left_quote;
-                left_quote->parent = node;
 
                 Node_Token *right_quote = new Node_Token;
                 right_quote = set_node(none_token, nullptr, nullptr, node);
                 node->right = right_quote;
                 right_quote->parent = node;
 
+                // *      none  <-right_quote
+                // *     /   \
+                //   
                 right_quote->left=insert(right_quote, tokenbuffer, index);
-                index++;
+                // index++;
                 right_quote->right=insert(right_quote, tokenbuffer, index);
-                
+                // index++;
             }
             // ATOM := SYMBOL | INT | FLOAT | STRING | NIL | T
             else {
                 cerr << "\033[1;35m" << "** ATOM := SYMBOL | INT | FLOAT | STRING | NIL | T  **" << "\033[0m" << endl;
-                node = set_node(none_token, nullptr, nullptr, parent);
-                node->left = new Node_Token;
-                node->left = set_node(current_token, nullptr, nullptr, node);
-                index++;
-                // ! 還沒考慮 dot 的情況
-                node->right = insert(node, tokenbuffer, index);
-                // ! 還沒考慮 dot 的情況
-
-                /*
-                // 若下個 token 為 DOT，則當前 token 為左子樹，left、right 指向 nullptr，不再往下遞迴 insert
-                if (next_token.type == DOT) {
-                    cerr << "\033[1;35m" << "** DOT **" << "\033[0m" << endl;
-                    cerr << "\033[1;35m" << "unwrite" << "\033[0m" << endl;
+                // node = set_node(current_token, nullptr, nullptr, parent);
+                // if (tokenbuffer.size() == 1) 
+                //     return node;
+                // else if (current_token.type == NIL) {
+                //     node = set_node(current_token, nullptr, nullptr, parent);
+                // }
+                if (size == 1 || last_token.type == Left_PAREN || last_token.type == QUOTE) {
+                    node = set_node(current_token, nullptr, nullptr, parent);
                     // index++;
-                }
-                // 若上個 token 為 DOT，則當前 token 為右子樹，left、right 指向 nullptr，不再往下遞迴 insert
-                else if (last_token.type == DOT) {
-                    // ignore next ')' token
-                    cerr << "\033[1;35m" << "last_token.type == DOT" << "\033[0m" << endl;
-                    cerr << "\033[1;35m" << "ignore next ')' token" << "\033[0m" << endl;
-                    index++;
-                }
-                else {
-                    // node->left = nullptr;
-                    
                     // node->right = insert(node, tokenbuffer, index);
-                }*/
+                }
+                else if (last_token.type != Left_PAREN && last_token.type != DOT) {
+                    // 上一個 token 不是 '(' or '.'，則當前 token 為右子樹，需新建空節點
+                    node = set_node(none_token, nullptr, nullptr, parent); // 空節點
+                    Node_Token *left_atom = set_node(current_token, nullptr, nullptr, node);
+                    node->left = left_atom;
+
+                    // index++;
+                    // cerr << "\033[1;35m" << "index++ " << "\033[0m" << endl;
+                    node->right = insert(node, tokenbuffer, index);
+
+                }
+                // else {
+                //     node->right = insert(node, tokenbuffer, index);
+                //     // index++;
+                // }
                 
             }
             
@@ -723,7 +747,7 @@ private:
             type = NIL;
         else if (str == "T")
             type = T;
-        else if (str == "'" || str == "QUOTE")
+        else if (str == "'") // || str == "QUOTE"
             type = QUOTE;
         else if (str == "(") 
             type = Left_PAREN;
