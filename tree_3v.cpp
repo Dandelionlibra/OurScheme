@@ -321,7 +321,10 @@ class AST_Tree {
                         // }
                         start = 0 ;
                         node->left = insert(node, side_token, start);
-                        index = end+1;
+                        if (tokenbuffer.at(end).type == Right_PAREN)
+                            index = end+1; // skip ')'
+                        else
+                            index = end;
                         cerr << "********* index: " << index << endl;
                         cerr << "\033[1;32m" << "** end bulid side quote tree **" << "\033[0m" << endl;
                     }
