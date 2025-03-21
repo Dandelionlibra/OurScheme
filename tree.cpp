@@ -182,12 +182,12 @@ class AST_Tree {
         cerr << "\033[1;32mindex: " << index << "\033[0m" << endl;
 
         if (index > size) {
-            // cerr << "\033[1;31m* 2. touch bottom *\033[0m" << endl;
+            cerr << "\033[1;31m* 2. touch bottom *\033[0m" << endl;
             return nullptr;
         }
         else if (index == size) {
             // index++;
-            // cerr << "\033[1;31m* 1. touch bottom *\033[0m" << endl;
+            cerr << "\033[1;31m* 1. touch bottom *\033[0m" << endl;
             node = set_node(nil_token, nullptr, nullptr, parent);
             return node;
         }
@@ -197,17 +197,17 @@ class AST_Tree {
         Token last_token;
         if (index > 0) last_token = tokenbuffer.at(index - 1);
         else  last_token = set_token("None", None, -1);
-        // cerr << "last_token: " << last_token.value << endl;
+        cerr << "last_token: " << last_token.value << endl;
         // !current_token
         Token current_token = tokenbuffer.at(index);
-        // cerr << "current_token: " << current_token.value << endl;
+        cerr << "current_token: " << current_token.value << endl;
         index++;
         // cerr << "\033[1;32m" << "index++ " << "\033[0m" << endl;
         // !next_token
         Token next_token;
         if (index < size) next_token = tokenbuffer.at(index);
         else next_token = set_token("None", None, -1);
-        // cerr << "next_token: " << next_token.value << endl;
+        cerr << "next_token: " << next_token.value << endl;
         // *********************************************************
         
         
@@ -216,7 +216,7 @@ class AST_Tree {
             // cerr << "\033[1;35mis_s_exp\033[0m" << endl;
             
             if (current_token.type == Left_PAREN) {
-                // cerr << "\033[1;35m" << "** Left_PAREN **" << "\033[0m" << endl;
+                cerr << "\033[1;35m" << "** Left_PAREN **" << "\033[0m" << endl;
                 // ! I think will not enter in here
                 if (next_token.type == Right_PAREN)
                     cerr << "\033[1;35m" << "** I think will not enter in here **" << "\033[0m" << endl;
@@ -260,7 +260,7 @@ class AST_Tree {
             }
             // ATOM := SYMBOL | INT | FLOAT | STRING | NIL | T
             else {
-                // cerr << "\033[1;35m" << "** ATOM := SYMBOL | INT | FLOAT | STRING | NIL | T  **" << "\033[0m" << endl;
+                cerr << "\033[1;35m" << "** ATOM := SYMBOL | INT | FLOAT | STRING | NIL | T  **" << "\033[0m" << endl;
                 // ((()()))=((#f #f))
                 if (size == 1 || !create_node || last_token.type == QUOTE) {
                     // cerr << "\033[1;35m" << "** create_node == F **" << "\033[0m" << endl;
@@ -274,18 +274,22 @@ class AST_Tree {
                     node = set_node(none_token, nullptr, nullptr, parent); // 空節點
 
                     if (current_token.type == QUOTE) {
-                        // cerr << "\033[1;32m" << "** start bulid side quote tree **" << "\033[0m" << endl;
+                        cerr << "\033[1;32m" << "** start bulid side quote tree **" << "\033[0m" << endl;
                         int start = index;
                         int end = index;
 
-                        do { end++; }
-                        while(tokenbuffer.at(end).type != Right_PAREN && tokenbuffer.at(end).level!=tokenbuffer.at(start).level);
-                    
+                        cerr << "tokenbuffer.at(start).level: " << tokenbuffer.at(start).level << endl;
+                        do { 
+                            end++; 
+                            cerr << "tokenbuffer.at(end).level: " << tokenbuffer.at(end).level << endl;
+                        }
+                        while(tokenbuffer.at(end).type != Right_PAREN || tokenbuffer.at(end).level!=tokenbuffer.at(start).level);
+                        
                         
                         vector<Token> side_token(tokenbuffer.begin() + start-1, tokenbuffer.begin() + end);
-                        // for (auto &t : side_token) {
-                        //     cerr << "side_token: " << t.value << endl;
-                        // }
+                        for (auto &t : side_token) {
+                            cerr << "side_token: " << t.value << endl;
+                        }
                         start = 0 ;
                         node->left = insert(node, side_token, start);
                         if (tokenbuffer.at(end).type == Right_PAREN)
@@ -293,7 +297,7 @@ class AST_Tree {
                         else
                             index = end;
                         // cerr << "********* index: " << index << endl;
-                        // cerr << "\033[1;32m" << "** end bulid side quote tree **" << "\033[0m" << endl;
+                        cerr << "\033[1;32m" << "** end bulid side quote tree **" << "\033[0m" << endl;
                     }
                     else {
                         Node_Token *left_atom = set_node(current_token, nullptr, nullptr, node);
@@ -304,10 +308,10 @@ class AST_Tree {
 
                 }
                 if (last_token.type == DOT) {
-                    // cerr << "\033[1;35m" << "** last_token.type == DOT **" << "\033[0m" << endl;
-                    // cerr << "node->parent->token.value : " << node->parent->token.value << endl;
+                    cerr << "\033[1;35m" << "** last_token.type == DOT **" << "\033[0m" << endl;
+                    cerr << "node->parent->token.value : " << node->parent->token.value << endl;
                     node->parent->token = set_token(last_token.value, last_token.type, last_token.level, last_token.line, last_token.column);
-                    // cerr << "node->parent->token.value : " << node->parent->token.value << endl;
+                    cerr << "node->parent->token.value : " << node->parent->token.value << endl;
                 }
                 
             }
@@ -315,14 +319,18 @@ class AST_Tree {
         }
         // Right_PAREN
         else if (current_token.type == Right_PAREN) {
-            // cerr << "\033[1;35m---------------is_Right_PAREN-------------\033[0m" << endl;
+            cerr << "\033[1;35m---------------is_Right_PAREN-------------\033[0m" << endl;
             node = set_node(nil_token, nullptr, nullptr, parent); // 為 leaf node，不需再往下 insert
             
         }
         // DOT
         else if (current_token.type == DOT) {
-            // cerr << "\033[1;35mis_DOT\033[0m" << endl;
+            cerr << "\033[1;35mis_DOT\033[0m" << endl;
             // 回到當前 node 的 parent->right 去 insert nil 進去，並將其 left、right 指向 nullptr
+            cerr << "parent->token.value: " << parent->token.value << endl;
+            cerr << "parent->token.line: " << parent->token.line << endl;
+            cerr << "parent->token.column: " << parent->token.column << endl;
+
             node = insert(parent, tokenbuffer, index, false);
 
         }
