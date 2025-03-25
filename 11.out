@@ -1,0 +1,16 @@
+Welcome to OurScheme!
+
+> .
+0.25
+.
+nil
+nil
+
+0.25
+.
+nil
+.
+nil
+
+> ERROR (no more input) : END-OF-FILE encountered
+Thanks for using OurScheme!
