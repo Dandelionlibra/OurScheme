@@ -210,15 +210,34 @@ class AST_Tree {
         // *********************************************************
         
         if (current_token.type == Left_PAREN) {
+            cerr << "\033[1;35m" << "** Left_PAREN  **" << "\033[0m" << endl;
             current_token = set_token(".", DOT, current_token.level, current_token.line, current_token.column);
-            node = set_node(current_token, nullptr, nullptr, parent);
-            if (index == 1) {
+            if (!create_node) {
+                cerr << "\033[1;35m" << "** create_node == false  **" << "\033[0m" << endl;
+                
+                node = set_node(current_token, nullptr, nullptr, parent);
+            
+            // if (index == 1) {
                 node->left = insert(node, tokenbuffer, index);
-                cerr << "\033[1;32m" << "back to ('s , start right_child" << "\033[0m" << endl;
+                cerr << "\033[1;32m" << "1. back to ('s , start right_child" << "\033[0m" << endl;
                 node->right = insert(node, tokenbuffer, index, true);
             }
-            // sub tree
             else {
+                cerr << "\033[1;35m" << "** create_node == true  **" << "\033[0m" << endl;
+                node = set_node(none_token, nullptr, nullptr, parent); // 空節點
+                //index--; // back to current ( in next step
+                //// node->left = insert(node, token, index)
+                // 
+                Node_Token *left_paren = set_node(current_token, nullptr, nullptr, node);
+                node->left = left_paren;
+                left_paren->left = insert(node, tokenbuffer, index);
+                cerr << "\033[1;32m" << "2. back to ('s , start right_child" << "\033[0m" << endl;
+                left_paren->right = insert(node, tokenbuffer, index, true);
+                node->right = insert(node, tokenbuffer, index, true);
+            }
+            // }
+            // sub tree
+            /*else {
                 cerr << "\033[1;32m" << "** start bulid side PAREN tree **" << "\033[0m" << endl;
                 int start = index;
                 int end = index;
@@ -232,14 +251,22 @@ class AST_Tree {
                 }
                 start = 0 ;
                 node->left = insert(node, side_token, start);
-                index = end+1; // skip ')'
+                index = end; //+1 skip ')'
                 // cerr << "********* index: " << index << endl;
                 cerr << "\033[1;32m" << "** end bulid side PAREN tree **" << "\033[0m" << endl;
                 node->right = insert(node, tokenbuffer, index, true);
-            }
+            }*/
         }
         else if (current_token.type == QUOTE) {
             cerr << "\033[1;35m" << "** QUOTE **" << "\033[0m" << endl;
+            if (!create_node) {
+                cerr << "\033[1;33m" << "**in create_node == false  **" << "\033[0m" << endl;
+
+            }
+            else {
+                cerr << "\033[1;33m" << "**in create_node == true  **" << "\033[0m" << endl;
+
+            }
             if (next_token.type == Left_PAREN) {
                 // *                   .  <-node
                 // *                 /  \
@@ -308,28 +335,110 @@ class AST_Tree {
 
             }
             
+            if (!create_node) {
+                cerr << "\033[1;33m" << "**out create_node == false  **" << "\033[0m" << endl;
 
+            }
+            else {
+                cerr << "\033[1;33m" << "**out create_node == true  **" << "\033[0m" << endl;
+                Node_Token *empty = set_node(none_token, node, nullptr, parent);
+                node->parent = empty;
+                empty->right = insert(empty, tokenbuffer, index, true);
+                return empty;
+            }
 
         }
         else if (current_token.type == DOT) {
+            cerr << "\033[1;35m" << "** DOT  **" << "\033[0m" << endl;
+            parent->token = current_token;
+            // *
+            if (next_token.type != Left_PAREN) {
+                cerr << "\033[1;35m" << "** next_token != Left_PAREN  **" << "\033[0m" << endl;
+                node = set_node(next_token, nullptr, nullptr, parent);
+                // insert(parent, tokenbuffer, index, true); // parent's right child
+                // * (2 . 3)
+                // *      ↑ next_token
+                index++; // ignore next_token
+                index++; // ignore ')'
+            }
+            else {
+                cerr << "\033[1;32m" << "** start bulid side quote tree **" << "\033[0m" << endl;
+                int start = index; // (
+                int end = index;
 
+                while (tokenbuffer.at(end).type != Right_PAREN || tokenbuffer.at(end).level!=next_token.level)
+                    end++;
+                vector<Token> side_token(tokenbuffer.begin() + start, tokenbuffer.begin() + end+1);
+                for (auto &t : side_token) {
+                    cerr << "\033[1;33m" << "side_token: " << t.value << "\033[0m" << endl;
+                }
+                    
+                start = 0 ;
+                node = insert(parent, side_token, start);
+                index = index+start+1; // +1
+
+                cerr << "\033[1;32m" << "** end bulid side dot tree **" << "\033[0m" << endl;
+
+            }//(1 . (2 . (3 . 4)))
+
+            // if (create_node) {
+            //     Node_Token *empty = set_node(none_token, nullptr, nullptr, parent);
+            // }
+
+            // *
+            // cerr << "tokenbuffer.at(index+1).value: " << tokenbuffer.at(index+1).value << endl;
+            // if (tokenbuffer.at(index+1).type == Right_PAREN) {
+            //     cerr << "tokenbuffer.at(index).value: " << tokenbuffer.at(index).value << endl;
+            //     node = set_node(tokenbuffer.at(index), nullptr, nullptr, parent);
+            //     index=index+2;
+            // }
+            // else {
+                
+            // }
+            
         }
         else if (current_token.type == Right_PAREN) {
             cerr << "\033[1;35m---------------is_Right_PAREN-------------\033[0m" << endl;
             node = set_node(nil_token, nullptr, nullptr, parent); // 為 leaf node，不需再往下 insert
             
         }
+        // 5
         else {
             cerr << "\033[1;35m" << "** ATOM := SYMBOL | INT | FLOAT | STRING | NIL | T  **" << "\033[0m" << endl;
 
-            if (!create_node)
+            if (!create_node) {
+                cerr << "\033[1;35m" << "** create_node == false  **" << "\033[0m" << endl;
+
                 node = set_node(current_token, nullptr, nullptr, parent);
+            }
             else {
+                cerr << "\033[1;35m" << "** create_node == true  **" << "\033[0m" << endl;
                 node = set_node(none_token, nullptr, nullptr, parent); // 空節點
                 Node_Token *left_atom = set_node(current_token, nullptr, nullptr, node);
                 node->left = left_atom;
                 // left_atom->left = insert(node, tokenbuffer, index);
-                node->right = insert(node, tokenbuffer, index, true);
+                /*if (next_token.type == DOT) {
+                    node->token = next_token;
+                    index++; // skip DOT
+                    node->right = insert(node, tokenbuffer, index);
+                    if (tokenbuffer.at(index).type == Right_PAREN) {
+                        cerr << "\033[1;35m" << "** end : Right_PAREN **" << "\033[0m" << endl;
+                        cerr << "tokenbuffer.at(index): " << tokenbuffer.at(index).value << endl;
+                        index++; // skip Right_PAREN
+                        
+                    }
+                    else {
+                        cerr << "\033[1;35m" << "** end : non Right_PAREN **" << "\033[0m" << endl;
+                        cerr << "tokenbuffer.at(index): " << tokenbuffer.at(index).value << endl;
+                    }
+                        
+
+                }*/
+                // else {
+                    node->right = insert(node, tokenbuffer, index, true);
+                
+                
+                // }
             }
             
         }
@@ -438,7 +547,8 @@ private:
     AST_Tree tree;
     int currnt_level = 0;
     // vector <pair<int, pair<Token*, bool>>> dot_appear; // first: current_level, second: appear or not
-    vector <pair<Token*, bool>> dot_appear; // first: pointer to ( , second: appear or not
+    // vector <pair<Token, bool>> dot_appear; // first: pointer to ( , second: appear or not
+    vector <pair<Token, pair<bool, bool>>> dot_appear; // first: pointer to ( , second: (dot appear or not, following data appear or not)
 
     // vector<Token> tokenBuffer;
 
@@ -460,27 +570,51 @@ private:
         return false;
     }
 
-    void renew_dot_appear(TokenType t, Token* p) {
+    bool compare_token(Token &t1, Token &t2) {
+        if (t1.value == t2.value && t1.type == t2.type && t1.level == t2.level && t1.line == t2.line && t1.column == t2.column)
+            return true;
+        return false;
+    }
+    void renew_dot_appear(TokenType t, Token p) {
         // for (; currnt_level <= level; currnt_level++)
         //     dot_appear.push_back({currnt_level, false});
 
         if (t == DOT) {
-            for (auto &dot : dot_appear) {
-                if (dot.first == p) {
-                    dot.second = true;
+            for (int i = dot_appear.size()-1; i >= 0; i--) {
+                if (compare_token(dot_appear.at(i).first, p)) {
+                    dot_appear.at(i).second.first = true;
                     break;
                 }
             }
         }
         else if (t == Left_PAREN)
-            dot_appear.push_back({p, false});
+            dot_appear.push_back({p, {false, false}});
     }
 
-    bool check_dot_appear(Token* p) {
+    bool check_dot_appear(Token p) {
         int size = dot_appear.size();
         for (auto &dot : dot_appear) {
-            if (dot.first == p) {
-                return dot.second;
+            if (compare_token(dot.first, p)) {
+                cerr << "dot.first.value: " << dot.first.value << endl;
+                return dot.second.first;
+            }
+        }
+        return false;
+    }
+
+    void renew_data_appear(Token p) {
+        for (int i = dot_appear.size()-1; i >= 0; i--) {
+            if (compare_token(dot_appear.at(i).first, p)) {
+                dot_appear.at(i).second.second = true;
+                break;
+            }
+        }
+    }
+
+    bool check_data_appear(Token p) {
+        for (auto &dot : dot_appear) {
+            if (compare_token(dot.first, p)) {
+                return dot.second.second;
             }
         }
         return false;
@@ -529,14 +663,25 @@ public:
             // DOT
             if (tokenBuffer.at(index_curr).type == DOT) {
                 // DOT 前後必須是完整 ATOM 或是 S-EXP
+                // 當 dot後讀到 ATOM 或跟 dot level 一樣的 ')'時，have_data=true，其後不能再出現
                 // 避免 ('. or (. 
                 if (tokenBuffer.at(index_prev).type == QUOTE || tokenBuffer.at(index_prev).type == Left_PAREN)
                     error = UNEXPECTED_TOKEN;
                 // 一對 () 內只能有一個 DOT
+                // 找比自己(dot or atom)當前level低1的(
                 for (int i = index_prev ; i >= 0; i--) {
-                    if (tokenBuffer.at(i).type == Left_PAREN) {
-                        if (check_dot_appear(&tokenBuffer.at(i)) == true)
+                    // cerr << "tokenBuffer.at(i).value: " << tokenBuffer.at(i).value << endl;
+                    if (tokenBuffer.at(i).type == Left_PAREN && tokenBuffer.at(i).level == tokenBuffer.at(index_curr).level - 1) {
+                        if (check_dot_appear(tokenBuffer.at(i))) {
+                            // cerr << "\033[1;31mcheck_dot_appear == true\033[0m" << endl;
+                            // cerr << "check_dot_appear: " << tokenBuffer.at(i).value << endl;
                             error = UNEXPECTED_END_PAREN;
+                        }
+                        else //if(tokenBuffer.at(index_curr).type == DOT) {
+                            // cerr << "\033[1;31mcheck_dot_appear == false\033[0m" << endl;
+                            renew_dot_appear(DOT, tokenBuffer.at(i));
+                        //}
+                            
                         break;
                     }
                 }
@@ -545,17 +690,46 @@ public:
 
             }
             // right Paren
-            if (tokenBuffer.at(index_curr).type == Right_PAREN) {
+            else if (tokenBuffer.at(index_curr).type == Right_PAREN) {
                 // Right_PAREN 前必須是完整 ATOM 或是 S-EXP
                 // 避免 ') or .) 
                 if (tokenBuffer.at(index_prev).type == QUOTE || tokenBuffer.at(index_prev).type == DOT) {
                     error = UNEXPECTED_TOKEN;
                 }
+                // 一對 () 內只能有一個 DOT
+                // 在與當前 ')' 前，相同 level 的'('間，觀察 level+1 的元素中 DOT 後出現第一個 ATOM、) 後的元素是否有非')'的元素
+                // !ERROR (unexpected token) : ')' expected
+            }
+            else { // ATOM
+                int c = 0;
+                for (int i = token_size-1 ; i >= 0 ; i--) {
+                    // cerr << "\033[1;33m1. tokenBuffer.at(i).value: " << tokenBuffer.at(i).value << "\033[0m" << endl;
+                    if (tokenBuffer.at(i).type == Left_PAREN && tokenBuffer.at(i).level == tokenBuffer.at(index_curr).level-1)
+                        break;
+                    // 檢查與自己level相同的元素即可，但不含'\''、')'
+                    else if (tokenBuffer.at(i).level == tokenBuffer.at(index_curr).level) {
+                        if (tokenBuffer.at(i).type == Right_PAREN || tokenBuffer.at(i).type == QUOTE)
+                            continue;
+                        
+                        if (tokenBuffer.at(i).type == DOT) {
+                            if (c>1)
+                                error = UNEXPECTED_END_PAREN;
+                            break;
+                        }
+                        else{
+                            // cerr << "\033[1;33m2. tokenBuffer.at(i).value: " << tokenBuffer.at(i).value << "\033[0m" << endl;
+                        
+                            c++;
+                        }
+                    }
+
+                }
+
             }
             // Left_PAREN
-            if (tokenBuffer.at(index_curr).type == Left_PAREN) {
-                renew_dot_appear(tokenBuffer.at(index_curr).type, &tokenBuffer.at(index_curr));
-            }
+            // if (tokenBuffer.at(index_curr).type == Left_PAREN) {
+                renew_dot_appear(tokenBuffer.at(index_curr).type, tokenBuffer.at(index_curr));
+            // }
             
         }
 
@@ -1112,6 +1286,7 @@ public:
                     tmptoken.value = "#t";
                 
                 tokenBuffer.push_back(tmptoken);
+                cerr << "\033[1;32m" << "tmpstr: " << tmpstr << "\033[0m" << endl;
                 
                 
                 // no error, judge the syntax
@@ -1139,6 +1314,8 @@ public:
                         tokenBuffer.push_back(nil_token);
                     }
                 }
+
+                cerr << "\033[1;32m" << "tmptoken.value: " << tmptoken.value << "\033[0m" << endl;
                 
             }
             catch (errorType error) {
@@ -1149,8 +1326,26 @@ public:
                 // return; // ! return when error occur, go to main() print error message
             }
             
-            if (tokenBuffer.size() == 1 && tokenBuffer.at(0).type == QUOTE)
-                finish_input = false;
+            if (tokenBuffer.at(0).type == QUOTE) {
+                if (leftParen == 0) {    
+                    int i = 0;
+                    for( ; i < tokenBuffer.size(); i++) {
+                        if (tokenBuffer.at(i).type != QUOTE) {
+                            finish_input = true;
+                            break; 
+                        }
+                        // else {
+                        //     break;
+                        // }
+                    }
+                }
+                else if (leftParen == rightParen)
+                    finish_input = true;
+
+                
+            }
+            // if (tokenBuffer.size() == 1 && tokenBuffer.at(0).type == QUOTE)
+            //     finish_input = false;
             else if ((level == 0 && tokenBuffer.size() > 0) || (leftParen != 0 && leftParen == rightParen))
                 finish_input = true;
             
@@ -1190,6 +1385,7 @@ public:
                         if (c == EOF)
                             ungetc(c, stdin); // push EOF back to the buffer
                     }
+                    start_column = 1;
         
                     cerr << "\033[1;33mthrow trash in get_token: " << trash << "\033[0m" << endl;
                     return;
