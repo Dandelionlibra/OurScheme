@@ -550,8 +550,6 @@ private:
 
     void pretty_print(Node_Token *node, int &countquote) {
         if (node == nullptr) {
-            print_space(countquote);
-            cout << ")" ;
             return;
         }
 
@@ -581,101 +579,110 @@ private:
         cerr << "right_token: " << right_token.value << endl;
         // *********************************************************
 
-        
-
-        if (node == root && node->token.type == DOT && node->token.level != -1) {
-            cout << "( " ;
-            
-            cerr << "\033[1;32m" << "countquote++: " << countquote << "\033[0m" << endl;
-            pretty_print(node->left, countquote);
-            countquote++;
-            
-            pretty_print(node->right, countquote);
-            
-        }
-        else if (current_token.type == DOT) {
-            cerr << "\033[1;35m" << "** DOT **" << "\033[0m" << endl;
-            // cout << "value: " << current_token.value << endl;
-            // cout << "type: " << current_token.type << endl;
-            // cout << "level: " << current_token.level << endl;
-            // cout << "line: " << current_token.line << endl;
-            // cout << "column: " << current_token.column << endl;
-            if (left_token.type == DOT) {
-                print_space(countquote);
-                cout << "( " ;//<< endl
-
-                countquote++;
-                cerr << "\033[1;32m" << "countquote++: " << countquote << "\033[0m" << endl;
-                pretty_print(node->left, countquote);
-                
-                cerr << "\033[1;35m" << "back to DOT right: " << countquote << "\033[0m" << endl;
-                pretty_print(node->right, countquote);
-                countquote--;
-                cerr << "\033[1;32m" << "countquote--: " << countquote << "\033[0m" << endl;
-                cout << ")" ;//<< endl
-            }
-            else if (left_token.type != DOT && right_token.type == DOT) {
-                pretty_print(node->left, countquote);
-                pretty_print(node->right, countquote);
-            }
-            else if (left_token.type != DOT && (right_token.type != DOT || right_token.type != NIL)) {
-                pretty_print(node->left, countquote);
-                print_space(countquote);
-                cout << "." << endl;
-                pretty_print(node->right, countquote);
-                // countquote--;
-            }
-            else if (left_token.type == NIL && right_token.type == NIL) {
-                print_space(countquote);
-                cout << "nil" << endl;
-                pretty_print(node->right, countquote);
-                
-               
-                // countquote--;
-            }
-            else {
-                cerr << "\033[1;35m" << "** DOT else **" << "\033[0m" << endl;
-            }
-            
-            
-        }
-        else if (current_token.type == QUOTE) {
+        if (current_token.type == DOT) {
+            cerr << "\033[1;35m" << "** outer DOT **" << "\033[0m" << endl;
             print_space(countquote);
-            cout << "( quote" << endl;//
+            cout << "( ";
             countquote++;
-        }
-        else if (node != root && current_token.type == NIL) {
-            // if (parent_token.type )
-            // print_space(countquote);
-            // cout << "nil" << endl;
-            // if (parent_token.level != -1) {
+            cerr << "\033[1;32m" << "countquote++: " << countquote << "\033[0m" << endl;
+
+            if (left_token.type == QUOTE) {
+                cerr << "\033[1;35m" << "** QUOTE **" << "\033[0m" << endl;
+                // print_space(countquote);
+                cout << "quote" << endl;//
+            }
+            else if (left_token.type == DOT) {
+                cerr << "\033[1;35m" << "** inner DOT **" << "\033[0m" << endl;
                 
-         
+                pretty_print(node->left, countquote);
+                
+            }
+            else if (left_token.type == NIL) { // (root == node && current_token.type == NIL) ||
+                cerr << "\033[1;35m" << "** NIL **" << "\033[0m" << endl;
+                // print_space(countquote);
+                cout << "nil" << endl;//
+
+            }
+            else { // ATOM
+                cerr << "\033[1;35m" << "** 1.ATOM **" << "\033[0m" << endl;
+                // deal float
+                if (left_token.type == FLOAT)
+                    process_float(left_token);
+                
+                // print_space(countquote);
+                cout << left_token.value << endl;
+                
+            }
+            Node_Token *tmp = node->right;
+            cerr << "** begin while **" <<endl;
+            while (tmp != nullptr) {
+                if (tmp->token.type == DOT && tmp->left->token.type == DOT) { //  && tmp->right->token.type == DOT
+                    cerr << "\033[1;35m" << "** while DOT 1 **" << "\033[0m" << endl;
+                    pretty_print(tmp->left, countquote);
+                }
+                else if (tmp->token.type == DOT) { // left_token.type != DOT
+                    cerr << "\033[1;35m" << "** while DOT 2 **" << "\033[0m" << endl;
+                    // if (tmp->left->token.type != NIL) {
+                        // deal float
+                        if (tmp->left->token.type == FLOAT)
+                            process_float(tmp->left->token);
+        
+                        print_space(countquote);
+                        if (tmp->left->token.type == NIL) {
+                            cout << "nil" << endl;
+                        }
+                        else
+                            cout << tmp->left->token.value << endl;
+                        
+                    // }
+                    // else if (tmp->left->token.type == NIL) {
+                    //     cerr << "\033[1;35m" << "** while DOT 3 **" << "\033[0m" << endl;
+                    //     print_space(countquote);
+                    //     cout << "nil" << endl;
+                    // }
+                }
+                else if (tmp->token.type == NIL) {
+                    cerr << "\033[1;35m" << "** while NIL **" << "\033[0m" << endl;
+                    pretty_print(tmp, countquote);
+                }
+                else { // ATOM
+                    cerr << "\033[1;35m" << "** while atom **" << "\033[0m" << endl;
+                    // pretty_print(tmp->left, countquote);
+                    print_space(countquote);
+                    cout << "." << endl;
+                    
+                    pretty_print(tmp, countquote);
+                    // cout << tmp->left << endl;
+                    // cout << ")" << endl;
+                    
+                    // break;
+                    
+                }
+                tmp = tmp->right;
+                // cerr << "tmp->right: " << tmp->right->token.value << endl;
+
+            }
+            countquote--;
             print_space(countquote);
             cout << ")" << endl;
             
-            countquote--;
-
         }
         else { //ATOM, leaf node
-            cerr << "\033[1;35m" << "** ATOM **" << "\033[0m" << endl;
-            // deal float
-            if (current_token.type == FLOAT) {
-                process_float(current_token);
-            }
+            cerr << "\033[1;35m" << "** 2.ATOM **" << "\033[0m" << endl;
+            if (current_token.type != NIL) {
+                // deal float
+                if (current_token.type == FLOAT)
+                    process_float(current_token);
 
-            if (current_token.level >= 0) {
                 print_space(countquote);
-                if (current_token.value == "#f")
-                    cout << "nil" << endl;
-                else    
+                // if (current_token.value == "#f")
+                //     cout << "nil" << endl;
+                // else
                     cout << current_token.value << endl;
             }
-            // pretty_print(node->left, countquote);
-            // pretty_print(node->right, countquote);
+
 
         }
-
 
 
     }
@@ -787,7 +794,10 @@ public:
             throw Error(UNEXPECTED_EXIT, "exit", "exit", 0, 0);
 
         root = tree.get_root();
-        print(root);
+        if (root->token.type == NIL) 
+            cout << "nil" << endl;
+        else
+            print(root);
         // tree.clear_tree(tree.get_root());
         
     }
