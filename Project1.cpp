@@ -581,7 +581,10 @@ private:
 
         if (current_token.type == DOT) {
             cerr << "\033[1;35m" << "** outer DOT **" << "\033[0m" << endl;
-            print_space(countquote);
+            // if ((node->parent!=nullptr && node != node->parent->right)) {
+                // print_space(countquote);
+            // }
+            
             cout << "( ";
             countquote++;
             cerr << "\033[1;32m" << "countquote++: " << countquote << "\033[0m" << endl;
@@ -618,6 +621,7 @@ private:
             while (tmp != nullptr) {
                 if (tmp->token.type == DOT && tmp->left->token.type == DOT) { //  && tmp->right->token.type == DOT
                     cerr << "\033[1;35m" << "** while DOT 1 **" << "\033[0m" << endl;
+                    print_space(countquote);
                     pretty_print(tmp->left, countquote);
                 }
                 else if (tmp->token.type == DOT) { // left_token.type != DOT
@@ -811,7 +815,7 @@ public:
     }
 
     ~SyntaxAnalyzer() {
-        tree.clear_tree(tree.get_root());
+        // tree.clear_tree(tree.get_root());
         root = nullptr;
         
         delete root;
