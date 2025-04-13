@@ -138,7 +138,7 @@ struct variable {
     TokenType type;
 };
 
-set<string> bulid_in_func = {
+set<string> bulid_in_func = { // only bulid-in function
     "define", "cons", "lambda", "list",
     "car", "cdr",
     "atom?", "pair?", "list?", "null?", "integer?", "real?", "number?", "string?", "boolean", "symbol?",
@@ -158,6 +158,16 @@ void test(string str_index, string str, TokenType type) {
     vars_correspond_table.insert({str_index, var});
 }
 
+class FunctionExecutor {
+    private:
+
+    public:
+    Node_Token* apply_function(string& func_name, vector<Node_Token*>& args, errorType& e){
+        
+    };
+};
+
+FunctionExecutor global_func_executor;
 
 vector<Node_Token*> define_trees;
 // in order to parse the input, build a parser tree
@@ -1165,7 +1175,37 @@ public:
         if (tree.check_exit())
             throw Error(UNEXPECTED_EXIT, "exit", "exit", 0, 0);
     }
-
+    
+    vector<Node_Token*> eval_arg_list(Node_Token* list, errorType &e, AST_Tree &sub_tree) {
+        vector<Node_Token*> args;
+        if (list == nullptr || list->token.value == "nil")
+            return args; // Return an empty vector if the list is nil or null
+    
+        Node_Token* curr = list;
+    
+        while (curr != nullptr && curr->token.type == DOT) {
+            Node_Token* orig_arg = curr->left;
+            Node_Token* evaled_arg = eval(orig_arg, e);
+            if (e != Error_None)
+                return args; // Return the collected arguments so far if an error occurred
+    
+            if (orig_arg != evaled_arg) {
+                sub_tree.clear_tree(orig_arg);
+                curr->left = evaled_arg;
+            }
+    
+            args.push_back(evaled_arg);
+            curr = curr->right;
+        }
+    
+        if (curr != nullptr && curr->token.value != "nil") {
+            e = non_list;
+            throw Error(non_list, "non-list", "non-list", curr->token.line, curr->token.column);
+        }
+    
+        return args;
+    }
+    
     bool is_quote_nil(Node_Token *t) {
         if (t->left->token.type == QUOTE && t->right->token.type == DOT && t->right->left->token.type == NIL && t->right->right->token.type == NIL) {
             return true;
@@ -1185,7 +1225,11 @@ public:
             if (t->token.type == SYMBOL) {
                 // Check if the symbol is bound
                 if (t->token.is_function) {
-                    t->token.value = "#<procedure "+ t->token.value +">";
+                    // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+                    // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+                    // t->token.value = "#<procedure "+ t->token.value +">";
+                    // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+                    // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
                 }
                 else if (vars_correspond_table.find(t->token.value) == vars_correspond_table.end()){
                     e = unbound_symbol;
@@ -1215,68 +1259,20 @@ public:
             return node; // Evaluate the left side of the dot
         }*/
 
-        Node_Token* func_Token = t->left;
+        Node_Token* func_Token = eval(t->left, e); // Evaluate the function token
+        func_name = func_Token->token.value;
+        cerr << "\033[1;33mfunc_Token: " << func_Token->token.value << "\033[0m" << endl;
+
+        if (e != Error_None)
+            return t; // Return the original node if an error occurred
+        
         Node_Token* arg_list = t->right;
-
-        if (func_Token->token.type != DOT) {
-            // Handle function name
-            func_name = func_Token->token.value;
-        } else {
-            e = unbound_symbol;
-            throw Error(unbound_symbol, func_Token->token.value, "unexpected token", func_Token->token.line, func_Token->token.column);
-        }
-
-
-        // Handle S-expressions
-        Node_Token *tmp = t;
-        while (e == Error_None && t->token.type == DOT && t->left->token.type == DOT) {
-            t->left = eval(t->left, e);
-        }
-
-        func_name = t->left->token.value;
-        Node_Token *current = t->right;
-
-        while (e == Error_None && current->token.type == DOT) {
-            if (func_name != "'" && current->left->token.type == DOT) {
-                current->left = eval(current->left, e);
-            }
-            args.push_back(current->left);
-            current = current->right;
-        }
-
-        if (current->token.type != NIL) {
-            throw Error(non_list, "non-list", "non-list", 0, 0, tmp);
-        }
-
-        // Check if the function name is valid
-        if (Reserved_function_map.find(func_name) == Reserved_function_map.end()) {
-            throw Error(undefined_function, func_name, "undefined function", t->left->token.line, t->left->token.column);
-        }
-
-        // Handle specific functions
-        Function func = Reserved_function_map[func_name];
-        if (func_name == "define" || func_name == "clean-environment" || func_name == "exit") {
-            if (args.size() != 2 && func_name == "define") {
-                throw Error(incorrect_number_of_arguments, func_name, "incorrect number of arguments", t->left->token.line, t->left->token.column);
-            }
-            // Handle other special cases for these functions
-        } else {
-            // Check argument count
-            if (func.arg_num != No_Limit && args.size() < func.arg_num) {
-                throw Error(incorrect_number_of_arguments, func_name, "incorrect number of arguments", t->left->token.line, t->left->token.column);
-            }
-
-            // Evaluate the function
-            // Placeholder for actual function execution logic
-        }
-
-        if (e == Error_None) {
-            tree.clear_tree(tmp); // Delete child tree
-        } else {
+        AST_Tree tree_util;
+        args = eval_arg_list(arg_list, e, tree_util);// eval 參數，替換節點與釋放原本節點
+        if (e != Error_None)
             return t;
-        }
-
-        return node;
+        
+        return global_func_executor.apply_function(func_name, args, e);
     }
 
     void print() {
