@@ -151,20 +151,77 @@ set<string> bulid_in_func = { // only bulid-in function
     "clean-environment"
 };
 set <string> func; // all function name, unclude self-defined function
-unordered_map<string, variable> vars_correspond_table; // store the variable name and value
+unordered_map<string, Node_Token*> vars_correspond_table; // store the variable name and value
 
-void test(string str_index, string str, TokenType type) {
-    variable var = {str, type};
-    vars_correspond_table.insert({str_index, var});
-}
+// void test(string str_index, string str, TokenType type) {
+//     variable var = {str, type};
+//     vars_correspond_table.insert({str_index, var});
+// }
 
 class FunctionExecutor {
     private:
+    bool float_flag = false;
+
+    int count_args(Node_Token *args) {
+        int count = 0;
+        while (args->left != nullptr) {
+            args = args->right;
+        }
+        return count;
+    }
 
     public:
     Node_Token* apply_function(string& func_name, vector<Node_Token*>& args, errorType& e){
-        
+
     };
+    Node_Token* plus(Node_Token *cur, Node_Token *args, errorType &e) {
+        Node_Token* node = new Node_Token();
+        vector<Node_Token*> arg_list;
+
+        if (count_args(args) < 2)
+            throw Error(incorrect_number_of_arguments, "+", "incorrect_number_of_arguments", 0, 0);
+        else { // args >= 2
+            Node_Token *t = args;
+            while (t != nullptr) {
+                Node_Token *parameter = 
+                
+                t->left;
+                
+                // arg_list.push_back();
+
+                t = t->right;
+            }
+            
+        }
+
+        
+    }
+
+    Node_Token* minus(Node_Token *cur, Node_Token *args, errorType &e) {
+        if (count_args(args) < 2)
+            throw Error(incorrect_number_of_arguments, "-", "incorrect_number_of_arguments", 0, 0);
+
+    }
+
+    Node_Token* multiply(Node_Token *cur, Node_Token *args, errorType &e) {
+        if (count_args(args) < 2)
+            throw Error(incorrect_number_of_arguments, "*", "incorrect_number_of_arguments", 0, 0);
+    }
+
+    Node_Token* division(Node_Token *cur, Node_Token *args, errorType &e) {
+        if (count_args(args) < 2)
+            throw Error(incorrect_number_of_arguments, "/", "incorrect_number_of_arguments", 0, 0);
+    }
+
+    Node_Token* clean_environment(Node_Token *cur, Node_Token *args, errorType &e) {
+        if (count_args(args) != 0)
+            throw Error(incorrect_number_of_arguments, "clean-environment", "incorrect_number_of_arguments", 0, 0);
+        else {
+            func.clear();
+        }
+        return nullptr;
+    }
+
 };
 
 FunctionExecutor global_func_executor;
@@ -469,7 +526,7 @@ class AST_Tree {
     }
 };
 
-
+/**/
 class Function {
     private:
     // template <typename T>
@@ -786,7 +843,7 @@ class Function {
         }
     }
 };
-        
+
 map <string, Function> Reserved_function_map = {
     {"define", Function("define", 2)},
     {"cons", Function("cons", 2)},
@@ -840,6 +897,7 @@ class SyntaxAnalyzer {
 private:
     AST_Tree tree;
     Node_Token *root;
+    
     // int currnt_level = 0;
     
     vector <pair<Token, bool>> dot_appear; // first: pointer to ( , second: (dot appear or not, following data appear or not)
@@ -1213,41 +1271,34 @@ public:
         return false;
     }
     
-    Node_Token* eval(Node_Token *t, errorType &e) {
-        if (t == nullptr) return nullptr;
+    Node_Token* eval(Node_Token *cur, errorType &e) {
+        if (cur == nullptr) return nullptr;
 
+        FunctionExecutor func_executor;
         string func_name;
         vector<Node_Token*> args;
         Node_Token *node = nullptr;
 
         // Handle atoms
-        if (t->token.type != DOT || is_quote_nil(t)) {
-            if (t->token.type == SYMBOL) {
+        if (is_ATOM(cur->token.type)) { //  != DOT &&  != QUOTE
+            if (cur->token.type == SYMBOL) {
                 // Check if the symbol is bound
-                if (t->token.is_function) {
-                    // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-                    // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-                    // t->token.value = "#<procedure "+ t->token.value +">";
-                    // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-                    // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-                }
-                else if (vars_correspond_table.find(t->token.value) == vars_correspond_table.end()){
+                // if (t->token.is_function) {
+                //     // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+                //     // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+                //     // t->token.value = "#<procedure "+ t->token.value +">";
+                //     // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+                //     // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+                // }
+                if (vars_correspond_table.find(cur->token.value) == vars_correspond_table.end()){
                     e = unbound_symbol;
-                    throw Error(unbound_symbol, t->token.value, "unbound symbol", t->token.line, t->token.column);
+                    throw Error(unbound_symbol, cur->token.value, "unbound symbol", cur->token.line, cur->token.column);
                 }
-                else {
-                    for (auto v:vars_correspond_table) {
-                        if (v.first == t->token.value) {
-                            t->token.value = v.second.name;
-                            t->token.type = v.second.type;
-                            break;
-                        }
-                    }
-                }
-
-                return t; // Return the bound symbol
+                else
+                    return vars_correspond_table[cur->token.value]; // Return the bound symbol
+                
             }
-            return t; // Return the atom itself
+            return cur; // Return the atom itself
         }
         /*else if (e == Error_None && t->token.type == DOT && t->left->token.type == DOT) {
             // Handle dot notation
@@ -1258,6 +1309,59 @@ public:
             node = eval(t->left, e);
             return node; // Evaluate the left side of the dot
         }*/
+
+
+        // judge pure list or not, the rightmost node must be NIL so that can continue
+        // if (...) is not a (pure) list
+        Node_Token *t = cur;
+        while (t != nullptr && t->token.type != NIL) {
+            t = t->right;
+        }
+        if (t == nullptr || t->token.type != NIL) {
+            cerr << "\033[1;35m" << "--- pure list ---" << "\033[0m" << endl;
+            e = non_list;
+            throw Error(non_list, "non-list", "non-list", t->token.line, t->token.column);
+        }
+
+        // if first argument of (...) is an atom ☆, which is not a symbol
+        // ERROR (attempt to apply non-function) : ☆
+        Node_Token* func_Token = cur->left;
+        if ( is_ATOM(func_Token->token.type) ){
+            if (func_Token->token.type != SYMBOL) {
+                e = undefined_function;
+                throw Error(undefined_function, func_Token->token.value, func_Token->token.value ,func_Token->token.line, func_Token->token.column);
+            }
+            // else if (func_Token->token.value == "define")
+
+            // else if (func_Token->token.value == "cons")
+
+            // else if (func_Token->token.value == "lambda")
+            
+            // else if (func_Token->token.value == "list")
+
+            // else if (func_Token->token.value == "car")
+
+            // else if (func_Token->token.value == "cdr")
+
+            else if (func_Token->token.value == "+")
+                return func_executor.plus(cur, cur->right, e);
+            else if (func_Token->token.value == "-")
+                func_executor.minus(cur, cur->right, e);
+            else if (func_Token->token.value == "*")
+                func_executor.multiply(cur, cur->right, e);
+            else if (func_Token->token.value == "/")
+                func_executor.division(cur, cur->right, e);
+            else if (func_Token->token.value == "clean-environment")
+                func_executor.clean_environment(cur, cur->right, e);
+
+        }
+        else if (cur->left->token.type == DOT) {
+            
+        }
+        else if (cur->left->token.type == QUOTE) {
+
+        }
+
 
         Node_Token* func_Token = eval(t->left, e); // Evaluate the function token
         func_name = func_Token->token.value;
@@ -1956,12 +2060,9 @@ public:
 
 
 
-
-
-
 int main() {
     func = bulid_in_func;
-    test("a", "3", INT);
+    // test("a", "3", INT);
     LexicalAnalyzer Lexical; //詞法分析器
     bool is_Syntax_legal = true;
     SyntaxAnalyzer Syntax; //語法分析器
