@@ -160,20 +160,31 @@ unordered_map<string, Node_Token*> vars_correspond_table; // store the variable 
 
 class FunctionExecutor {
     private:
-    bool float_flag = false;
+    
+    // vector<Node_Token*> arg_list;
 
     int count_args(Node_Token *args) {
         int count = 0;
         while (args->left != nullptr) {
+            // cerr << "\033[1;35m" << "args->left: " << args->left->token.value << "\033[0m" << endl;
             args = args->right;
+            count++;
         }
+        cerr << "\033[1;35m" << "count_args: " << count << "\033[0m" << endl;
         return count;
+    }
+    bool is_ATOM(TokenType type) {
+        // <ATOM> ::= SYMBOL | INT | FLOAT | STRING | NIL | T | Left-PAREN Right-PAREN
+        if (type == SYMBOL || type == INT || type == FLOAT || type == STRING || type == NIL || type == T) // || type == Left_PAREN || type == Right_PAREN
+            return true;
+        // QUOTE、DOT
+        return false;
     }
 
     public:
     Node_Token* apply_function(string& func_name, vector<Node_Token*>& args, errorType& e){
-
-    };
+        return nullptr;
+    }
 
     Node_Token* define_func(Node_Token *cur, Node_Token *args, errorType &e) {
         if (count_args(args) != 2)
@@ -305,45 +316,253 @@ class FunctionExecutor {
         }
         return nullptr;
     }
+
+    // (/ + - -)
+    // > ERROR (/ with incorrect argument type) : #<procedure +>
     Node_Token* plus(Node_Token *cur, Node_Token *args, errorType &e) {
         Node_Token* node = new Node_Token();
         vector<Node_Token*> arg_list;
+        bool float_flag = false;
 
         if (count_args(args) < 2)
             throw Error(incorrect_number_of_arguments, "+", "incorrect_number_of_arguments", 0, 0);
         else { // args >= 2
             Node_Token *t = args;
-            while (t != nullptr) {
-                Node_Token *parameter = 
+            while (t != nullptr && t->token.type != NIL) {
+                Node_Token *parameter = t->left;
+                // cerr << "\033[1;35m" << "parameter: " << parameter->token.value << "\033[0m" << endl;
+                arg_list.push_back(evalution(parameter, e));
                 
-                t->left;
-                
-                // arg_list.push_back();
+                if(arg_list.back()->token.type == FLOAT)
+                    float_flag = true;
 
                 t = t->right;
             }
             
         }
 
-        
-    }
+        if (float_flag) {
+            double sum = 0.0;
+            for (auto &arg : arg_list)
+                sum += stod(arg->token.value);
+            node->token.value = to_string(sum);
+            node->token.type = FLOAT;
+        }
+        else {
+            int sum = 0;
+            for (auto &arg : arg_list)
+                sum += stoi(arg->token.value);
+            node->token.value = to_string(sum);
+            node->token.type = INT;
+        }
 
+        // cerr << "\033[1;35m" << "node->token.value: " << node->token.value << "\033[0m" << endl;
+
+        return node;
+    }
     Node_Token* minus(Node_Token *cur, Node_Token *args, errorType &e) {
+        Node_Token* node = new Node_Token();
+        vector<Node_Token*> arg_list;
+        bool float_flag = false;
+
         if (count_args(args) < 2)
             throw Error(incorrect_number_of_arguments, "-", "incorrect_number_of_arguments", 0, 0);
+        else { // args >= 2
+            Node_Token *t = args;
+            while (t != nullptr && t->token.type != NIL) {
+                Node_Token *parameter = t->left;
+                // cerr << "\033[1;35m" << "parameter: " << parameter->token.value << "\033[0m" << endl;
+                arg_list.push_back(evalution(parameter, e));
+                
+                if(arg_list.back()->token.type == FLOAT)
+                    float_flag = true;
 
+                t = t->right;
+            }
+            
+        }
+
+        if (float_flag) {
+            double sum = stod(arg_list.at(0)->token.value);
+            for (int i = 1 ; i < arg_list.size() ; i++)
+                sum -= stod(arg_list.at(i)->token.value);
+
+            node->token.value = to_string(sum);
+            node->token.type = FLOAT;
+        }
+        else {
+            int sum = stoi(arg_list.at(0)->token.value);
+            for (int i = 1 ; i < arg_list.size() ; i++)
+                sum -= stoi(arg_list.at(i)->token.value);
+
+            node->token.value = to_string(sum);
+            node->token.type = INT;
+        }
+
+        // cerr << "\033[1;35m" << "node->token.value: " << node->token.value << "\033[0m" << endl;
+
+        return node;
     }
-
     Node_Token* multiply(Node_Token *cur, Node_Token *args, errorType &e) {
+        Node_Token* node = new Node_Token();
+        vector<Node_Token*> arg_list;
+        bool float_flag = false;
+
         if (count_args(args) < 2)
             throw Error(incorrect_number_of_arguments, "*", "incorrect_number_of_arguments", 0, 0);
-    }
+        else { // args >= 2
+            Node_Token *t = args;
+            while (t != nullptr && t->token.type != NIL) {
+                Node_Token *parameter = t->left;
+                // cerr << "\033[1;35m" << "parameter: " << parameter->token.value << "\033[0m" << endl;
+                arg_list.push_back(evalution(parameter, e));
+                
+                if(arg_list.back()->token.type == FLOAT)
+                    float_flag = true;
 
+                t = t->right;
+            }
+            
+        }
+
+        if (float_flag) {
+            double sum = 1.0;
+            for (auto &arg : arg_list)
+                sum *= stod(arg->token.value);
+            node->token.value = to_string(sum);
+            node->token.type = FLOAT;
+        }
+        else {
+            int sum = 1;
+            for (auto &arg : arg_list)
+                sum *= stoi(arg->token.value);
+            node->token.value = to_string(sum);
+            node->token.type = INT;
+        }
+
+        // cerr << "\033[1;35m" << "node->token.value: " << node->token.value << "\033[0m" << endl;
+
+        return node;
+    }
     Node_Token* division(Node_Token *cur, Node_Token *args, errorType &e) {
+        Node_Token* node = new Node_Token();
+        vector<Node_Token*> arg_list;
+        bool float_flag = false;
+
         if (count_args(args) < 2)
             throw Error(incorrect_number_of_arguments, "/", "incorrect_number_of_arguments", 0, 0);
+        else { // args >= 2
+            Node_Token *t = args;
+            while (t != nullptr && t->token.type != NIL) {
+                Node_Token *parameter = t->left;
+                // cerr << "\033[1;35m" << "parameter: " << parameter->token.value << "\033[0m" << endl;
+                arg_list.push_back(evalution(parameter, e));
+                
+                if(arg_list.back()->token.type == FLOAT)
+                    float_flag = true;
+
+                t = t->right;
+            }
+            
+        }
+
+        if (float_flag) {
+            double sum = stod(arg_list.at(0)->token.value);
+            for (int i = 1 ; i < arg_list.size() ; i++){
+                double divisor = stod(arg_list.at(i)->token.value);
+                if (divisor == 0.0) {
+                    e = division_by_zero;
+                    throw Error(division_by_zero, "/", "division by zero", 0, 0);
+                }
+                sum /= divisor;
+            }
+
+            node->token.value = to_string(sum);
+            node->token.type = FLOAT;
+        }
+        else {
+            int sum = stoi(arg_list.at(0)->token.value);
+            for (int i = 1 ; i < arg_list.size() ; i++){
+                double divisor = stoi(arg_list.at(i)->token.value);
+                if (divisor == 0.0) {
+                    e = division_by_zero;
+                    throw Error(division_by_zero, "/", "division by zero", 0, 0);
+                }
+                sum /= divisor;
+            }
+            node->token.value = to_string(sum);
+            node->token.type = INT;
+        }
+
+        // cerr << "\033[1;35m" << "node->token.value: " << node->token.value << "\033[0m" << endl;
+
+        return node;
     }
 
+    Node_Token* not_func(Node_Token *cur, Node_Token *args, errorType &e) {
+        if (count_args(args) != 1)
+            throw Error(incorrect_number_of_arguments, "not", "incorrect_number_of_arguments", 0, 0);
+        else {
+            // implement not function
+        }
+        return nullptr;
+    }
+    Node_Token* and_func(Node_Token *cur, Node_Token *args, errorType &e) {
+        if (count_args(args) != 2)
+            throw Error(incorrect_number_of_arguments, "and", "incorrect_number_of_arguments", 0, 0);
+        else {
+            // implement and function
+        }
+        return nullptr;
+    }
+    Node_Token* or_func(Node_Token *cur, Node_Token *args, errorType &e) {
+        if (count_args(args) != 2)
+            throw Error(incorrect_number_of_arguments, "or", "incorrect_number_of_arguments", 0, 0);
+        else {
+            // implement or function
+        }
+        return nullptr;
+    }
+    Node_Token* equal_func(Node_Token *cur, Node_Token *args, errorType &e) {
+        if (count_args(args) != 2)
+            throw Error(incorrect_number_of_arguments, "equal?", "incorrect_number_of_arguments", 0, 0);
+        else {
+            // implement equal? function
+        }
+        return nullptr;
+    }
+    Node_Token* smaller_func(Node_Token *cur, Node_Token *args, errorType &e) {
+        if (count_args(args) < 2)
+            throw Error(incorrect_number_of_arguments, "<", "incorrect_number_of_arguments", 0, 0);
+        else {
+            // implement < function
+        }
+        return nullptr;
+    }
+    Node_Token* bigger_func(Node_Token *cur, Node_Token *args, errorType &e) {
+        if (count_args(args) < 2)
+            throw Error(incorrect_number_of_arguments, ">", "incorrect_number_of_arguments", 0, 0);
+        else {
+            // implement > function
+        }
+        return nullptr;
+    }
+    Node_Token* smaller_equal_func(Node_Token *cur, Node_Token *args, errorType &e) {
+        if (count_args(args) < 2)
+            throw Error(incorrect_number_of_arguments, "<=", "incorrect_number_of_arguments", 0, 0);
+        else {
+            // implement <= function
+        }
+        return nullptr;
+    }
+    Node_Token* bigger_equal_func(Node_Token *cur, Node_Token *args, errorType &e) {
+        if (count_args(args) < 2)
+            throw Error(incorrect_number_of_arguments, ">=", "incorrect_number_of_arguments", 0, 0);
+        else {
+            // implement >= function
+        }
+        return nullptr;
+    }
 
 
 
@@ -356,9 +575,154 @@ class FunctionExecutor {
         return nullptr;
     }
 
+    Node_Token* evalution(Node_Token *cur, errorType &e) {
+        if (cur == nullptr) return nullptr;
+
+        string func_name;
+        vector<Node_Token*> args;
+        Node_Token *node = nullptr;
+
+        // Handle atoms
+        if (is_ATOM(cur->token.type)) { //  != DOT &&  != QUOTE
+            if (cur->token.type == SYMBOL) {
+                // Check if the symbol is bound
+                // if (t->token.is_function) {
+                //     // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+                //     // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+                //     // t->token.value = "#<procedure "+ t->token.value +">";
+                //     // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+                //     // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+                // }
+                if (vars_correspond_table.find(cur->token.value) == vars_correspond_table.end()){
+                    e = unbound_symbol;
+                    throw Error(unbound_symbol, cur->token.value, "unbound symbol", cur->token.line, cur->token.column);
+                }
+                else
+                    return vars_correspond_table[cur->token.value]; // Return the bound symbol
+                
+            }
+            return cur; // Return the atom itself
+        }
+
+        // judge pure list or not, the rightmost node must be NIL so that can continue
+        // if (...) is not a (pure) list
+        Node_Token *t = cur;
+        while (t != nullptr && t->token.type != NIL) {
+            t = t->right;
+        }
+        if (t == nullptr || t->token.type != NIL) {
+            cerr << "\033[1;35m" << "--- pure list ---" << "\033[0m" << endl;
+            e = non_list;
+            throw Error(non_list, "non-list", "non-list", 0, 0, cur);
+            // return cur; // Return the atom itself
+        }
+
+        // if first argument of (...) is an atom ☆, which is not a symbol
+        // ERROR (attempt to apply non-function) : ☆
+        Node_Token* func_Token = cur->left;
+        if ( is_ATOM(func_Token->token.type) ){
+            if (func_Token->token.type != SYMBOL) {
+                e = undefined_function;
+                throw Error(undefined_function, func_Token->token.value, func_Token->token.value ,func_Token->token.line, func_Token->token.column);
+            }
+            // else if (func_Token->token.value == "define")
+
+            // else if (func_Token->token.value == "cons")
+
+            // else if (func_Token->token.value == "lambda")
+            
+            // else if (func_Token->token.value == "list")
+
+            // else if (func_Token->token.value == "car")
+
+            // else if (func_Token->token.value == "cdr")
+
+            else if (func_Token->token.value == "+")
+                return plus(cur, cur->right, e);
+            else if (func_Token->token.value == "-")
+                return minus(cur, cur->right, e);
+            else if (func_Token->token.value == "*")
+                return multiply(cur, cur->right, e);
+            else if (func_Token->token.value == "/")
+                return division(cur, cur->right, e);
+            else if (func_Token->token.value == "not")
+                return not_func(cur, cur->right, e);
+            else if (func_Token->token.value == "and")
+                return and_func(cur, cur->right, e);
+            else if (func_Token->token.value == "or")
+                return or_func(cur, cur->right, e);
+            else if (func_Token->token.value == "=")
+                return equal_func(cur, cur->right, e);
+            else if (func_Token->token.value == "<")
+                return smaller_func(cur, cur->right, e);
+            else if (func_Token->token.value == ">")
+                return bigger_func(cur, cur->right, e);
+            else if (func_Token->token.value == "<=")
+                return smaller_equal_func(cur, cur->right, e);
+            else if (func_Token->token.value == ">=")
+                return bigger_equal_func(cur, cur->right, e);
+            // else if (func_Token->token.value == "string-append")
+
+            // else if (func_Token->token.value == "string>?")
+
+            // else if (func_Token->token.value == "string<?")
+
+            // else if (func_Token->token.value == "string=?")
+
+            // else if (func_Token->token.value == "eqv?")
+            //     return eqv(cur, cur->right, e);
+            // else if (func_Token->token.value == "equal?")
+            //     return equal(cur, cur->right, e);
+            // else if (func_Token->token.value == "begin")
+            //     return begin(cur, cur->right, e);
+            // else if (func_Token->token.value == "if")
+            //     return if_func(cur, cur->right, e);
+            // else if (func_Token->token.value == "cond")
+            //     return cond(cur, cur->right, e);
+
+            else if (func_Token->token.value == "clean-environment")
+                return clean_environment(cur, cur->right, e);
+            else { // undefined function
+                // cerr << "\033[1;33m" << "func_Token: " << func_Token->token.value << "\033[0m" << endl;
+                func_name = func_Token->token.value;
+                cerr << "\033[1;33m" << "func_name: " << func_name << "\033[0m" << endl;
+                if (func.find(func_name) == func.end()) {
+                    e = undefined_function;
+                    throw Error(undefined_function, func_name, func_name ,func_Token->token.line, func_Token->token.column);
+                }
+
+            }
+
+        }
+        else if (cur->left->token.type == DOT) {
+            
+        }
+        else if (cur->left->token.type == QUOTE) {
+
+        }
+
+
+        /*Node_Token* func_Token = eval(t->left, e); // Evaluate the function token
+        func_name = func_Token->token.value;
+        cerr << "\033[1;33mfunc_Token: " << func_Token->token.value << "\033[0m" << endl;
+
+        if (e != Error_None)
+            return t; // Return the original node if an error occurred
+        
+        Node_Token* arg_list = t->right;
+        AST_Tree tree_util;
+        args = eval_arg_list(arg_list, e, tree_util);// eval 參數，替換節點與釋放原本節點
+        if (e != Error_None)
+            return t;
+        */
+        
+        return nullptr;
+    }
+
+
 };
 
-FunctionExecutor global_func_executor;
+// FunctionExecutor global_func_executor;
 
 vector<Node_Token*> define_trees;
 // in order to parse the input, build a parser tree
@@ -1368,7 +1732,7 @@ public:
             throw Error(UNEXPECTED_EXIT, "exit", "exit", 0, 0);
     }
     
-    vector<Node_Token*> eval_arg_list(Node_Token* list, errorType &e, AST_Tree &sub_tree) {
+    /*vector<Node_Token*> eval_arg_list(Node_Token* list, errorType &e, AST_Tree &sub_tree) {
         vector<Node_Token*> args;
         if (list == nullptr || list->token.value == "nil")
             return args; // Return an empty vector if the list is nil or null
@@ -1405,7 +1769,7 @@ public:
         return false;
     }
     
-    Node_Token* eval(Node_Token *cur, errorType &e) {
+    Node_Token* evaluction(Node_Token *cur, errorType &e) {
         if (cur == nullptr) return nullptr;
 
         FunctionExecutor func_executor;
@@ -1413,151 +1777,8 @@ public:
         vector<Node_Token*> args;
         Node_Token *node = nullptr;
 
-        // Handle atoms
-        if (is_ATOM(cur->token.type)) { //  != DOT &&  != QUOTE
-            if (cur->token.type == SYMBOL) {
-                // Check if the symbol is bound
-                // if (t->token.is_function) {
-                //     // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-                //     // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-                //     // t->token.value = "#<procedure "+ t->token.value +">";
-                //     // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-                //     // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-                // }
-                if (vars_correspond_table.find(cur->token.value) == vars_correspond_table.end()){
-                    e = unbound_symbol;
-                    throw Error(unbound_symbol, cur->token.value, "unbound symbol", cur->token.line, cur->token.column);
-                }
-                else
-                    return vars_correspond_table[cur->token.value]; // Return the bound symbol
-                
-            }
-            return cur; // Return the atom itself
-        }
-        /*else if (e == Error_None && t->token.type == DOT && t->left->token.type == DOT) {
-            // Handle dot notation
-            if (e == Error_None && t->left->token.type == DOT) {
-                e = unbound_symbol;
-                throw Error(unbound_symbol, t->left->token.value, "unexpected token", t->left->token.line, t->left->token.column);
-            }
-            node = eval(t->left, e);
-            return node; // Evaluate the left side of the dot
-        }*/
-
-
-        // judge pure list or not, the rightmost node must be NIL so that can continue
-        // if (...) is not a (pure) list
-        Node_Token *t = cur;
-        while (t != nullptr && t->token.type != NIL) {
-            t = t->right;
-        }
-        if (t == nullptr || t->token.type != NIL) {
-            cerr << "\033[1;35m" << "--- pure list ---" << "\033[0m" << endl;
-            e = non_list;
-            throw Error(non_list, "non-list", "non-list", t->token.line, t->token.column);
-        }
-
-        // if first argument of (...) is an atom ☆, which is not a symbol
-        // ERROR (attempt to apply non-function) : ☆
-        Node_Token* func_Token = cur->left;
-        if ( is_ATOM(func_Token->token.type) ){
-            if (func_Token->token.type != SYMBOL) {
-                e = undefined_function;
-                throw Error(undefined_function, func_Token->token.value, func_Token->token.value ,func_Token->token.line, func_Token->token.column);
-            }
-            // else if (func_Token->token.value == "define")
-
-            // else if (func_Token->token.value == "cons")
-
-            // else if (func_Token->token.value == "lambda")
-            
-            // else if (func_Token->token.value == "list")
-
-            // else if (func_Token->token.value == "car")
-
-            // else if (func_Token->token.value == "cdr")
-
-            else if (func_Token->token.value == "+")
-                return func_executor.plus(cur, cur->right, e);
-            else if (func_Token->token.value == "-")
-                func_executor.minus(cur, cur->right, e);
-            else if (func_Token->token.value == "*")
-                func_executor.multiply(cur, cur->right, e);
-            else if (func_Token->token.value == "/")
-                func_executor.division(cur, cur->right, e);
-            else if (func_Token->token.value == "not")
-                func_executor.not_func(cur, cur->right, e);
-            else if (func_Token->token.value == "and")
-
-            else if (func_Token->token.value == "or")
-
-            else if (func_Token->token.value == "=")
-
-            else if (func_Token->token.value == "<")
-
-            else if (func_Token->token.value == ">")
-
-            else if (func_Token->token.value == "<=")
-
-            else if (func_Token->token.value == ">=")
-
-            else if (func_Token->token.value == "string-append")
-
-            else if (func_Token->token.value == "string>?")
-
-            else if (func_Token->token.value == "string<?")
-
-            else if (func_Token->token.value == "string=?")
-
-            else if (func_Token->token.value == "eqv?")
-                func_executor.eqv(cur, cur->right, e);
-            else if (func_Token->token.value == "equal?")
-                func_executor.equal(cur, cur->right, e);
-            else if (func_Token->token.value == "begin")
-                func_executor.begin(cur, cur->right, e);
-            else if (func_Token->token.value == "if")
-                func_executor.if_func(cur, cur->right, e);
-            else if (func_Token->token.value == "cond")
-                func_executor.cond(cur, cur->right, e);
-
-            else if (func_Token->token.value == "clean-environment")
-                func_executor.clean_environment(cur, cur->right, e);
-            else { // undefined function
-                // cerr << "\033[1;33m" << "func_Token: " << func_Token->token.value << "\033[0m" << endl;
-                func_name = func_Token->token.value;
-                cerr << "\033[1;33m" << "func_name: " << func_name << "\033[0m" << endl;
-                if (Reserved_function_map.find(func_name) == Reserved_function_map.end()) {
-                    e = undefined_function;
-                    throw Error(undefined_function, func_name, func_name ,func_Token->token.line, func_Token->token.column);
-                }
-
-            }
-
-        }
-        else if (cur->left->token.type == DOT) {
-            
-        }
-        else if (cur->left->token.type == QUOTE) {
-
-        }
-
-
-        /*Node_Token* func_Token = eval(t->left, e); // Evaluate the function token
-        func_name = func_Token->token.value;
-        cerr << "\033[1;33mfunc_Token: " << func_Token->token.value << "\033[0m" << endl;
-
-        if (e != Error_None)
-            return t; // Return the original node if an error occurred
-        
-        Node_Token* arg_list = t->right;
-        AST_Tree tree_util;
-        args = eval_arg_list(arg_list, e, tree_util);// eval 參數，替換節點與釋放原本節點
-        if (e != Error_None)
-            return t;
-        */
-        
-        return global_func_executor.apply_function(func_name, args, e);
-    }
+        return func_executor.eval
+    }*/
 
     void print() {
         // root = tree.get_root();
@@ -2269,17 +2490,21 @@ int main() {
             if (finish_input) {
                 // cerr << "\033[1;32mfinish_input\033[0m" << endl;
                 // bulid parser tree
+                cerr << "\033[1;34menter build_tree\033[0m" << endl;
                 Syntax.build_tree(Lexical.tokenBuffer);
                 Syntax.set_root();
-                Syntax.print();
+                cerr << "\033[1;34mend build_tree\033[0m" << endl;
+                Syntax.print(); // !Debug
 
                 cerr << "\033[1;34menter execute\033[0m" << endl;
-                Syntax.eval(Syntax.get_root(), E);
+                FunctionExecutor func_executor;
+                // Node_Token* result = nullptr;
+                Node_Token* result = func_executor.evalution(Syntax.get_root(), E);
 
                 cerr << "\033[1;34mend execute\033[0m" << endl;
 
 
-                Syntax.print();
+                Syntax.print(result);
 
                 // Syntax.pretty_print(Lexical.tokenBuffer);
 
@@ -2344,14 +2569,13 @@ int main() {
                     break;
                 case non_list:
                     cerr << "\033[1;31m" << "non_list" << "\033[0m" << endl;
-                    cout << e.message << endl;
+                    cout << e.message;
                     
+                    // Syntax.print(e.get_sub_error_tree());
                     Syntax.print(e.get_sub_error_tree());
                     Lexical.reset();
                     break;
                 
-                
-
                 default:
                     break;
             }
