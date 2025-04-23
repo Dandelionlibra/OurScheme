@@ -174,6 +174,137 @@ class FunctionExecutor {
     Node_Token* apply_function(string& func_name, vector<Node_Token*>& args, errorType& e){
 
     };
+
+    Node_Token* define_func(Node_Token *cur, Node_Token *args, errorType &e) {
+        if (count_args(args) != 2)
+            throw Error(incorrect_number_of_arguments, "define", "incorrect_number_of_arguments", 0, 0);
+        else {
+            // implement define function
+        }
+        return nullptr;
+    }
+
+    Node_Token* cons(Node_Token *cur, Node_Token *args, errorType &e) {
+        if (count_args(args) != 2)
+            throw Error(incorrect_number_of_arguments, "cons", "incorrect_number_of_arguments", 0, 0);
+        else {
+            // implement cons function
+        }
+        return nullptr;
+    }
+    Node_Token* lambda(Node_Token *cur, Node_Token *args, errorType &e) {
+        if (count_args(args) != 2)
+            throw Error(incorrect_number_of_arguments, "lambda", "incorrect_number_of_arguments", 0, 0);
+        else {
+            // implement lambda function
+        }
+        return nullptr;
+    }
+    Node_Token* list(Node_Token *cur, Node_Token *args, errorType &e) {
+        if (count_args(args) < 1)
+            throw Error(incorrect_number_of_arguments, "list", "incorrect_number_of_arguments", 0, 0);
+        else {
+            // implement list function
+        }
+        return nullptr;
+    }
+    Node_Token* car(Node_Token *cur, Node_Token *args, errorType &e) {
+        if (count_args(args) != 1)
+            throw Error(incorrect_number_of_arguments, "car", "incorrect_number_of_arguments", 0, 0);
+        else {
+            // implement car function
+        }
+        return nullptr;
+    }
+    Node_Token* cdr(Node_Token *cur, Node_Token *args, errorType &e) {
+        if (count_args(args) != 1)
+            throw Error(incorrect_number_of_arguments, "cdr", "incorrect_number_of_arguments", 0, 0);
+        else {
+            // implement cdr function
+        }
+        return nullptr;
+    }
+    
+    Node_Token* is_atom(Node_Token *cur, Node_Token *args, errorType &e) {
+        if (count_args(args) != 1)
+            throw Error(incorrect_number_of_arguments, "atom?", "incorrect_number_of_arguments", 0, 0);
+        else {
+            // implement atom? function
+        }
+        return nullptr;
+    }
+    Node_Token* is_pair(Node_Token *cur, Node_Token *args, errorType &e) {
+        if (count_args(args) != 1)
+            throw Error(incorrect_number_of_arguments, "pair?", "incorrect_number_of_arguments", 0, 0);
+        else {
+            // implement pair? function
+        }
+        return nullptr;
+    }
+    Node_Token* is_list(Node_Token *cur, Node_Token *args, errorType &e) {
+        if (count_args(args) != 1)
+            throw Error(incorrect_number_of_arguments, "list?", "incorrect_number_of_arguments", 0, 0);
+        else {
+            // implement list? function
+        }
+        return nullptr;
+    }
+    Node_Token* is_null(Node_Token *cur, Node_Token *args, errorType &e) {
+        if (count_args(args) != 1)
+            throw Error(incorrect_number_of_arguments, "null?", "incorrect_number_of_arguments", 0, 0);
+        else {
+            // implement null? function
+        }
+        return nullptr;
+    }
+    Node_Token* is_integer(Node_Token *cur, Node_Token *args, errorType &e) {
+        if (count_args(args) != 1)
+            throw Error(incorrect_number_of_arguments, "integer?", "incorrect_number_of_arguments", 0, 0);
+        else {
+            // implement integer? function
+        }
+        return nullptr;
+    }
+    Node_Token* is_real(Node_Token *cur, Node_Token *args, errorType &e) {
+        if (count_args(args) != 1)
+            throw Error(incorrect_number_of_arguments, "real?", "incorrect_number_of_arguments", 0, 0);
+        else {
+            // implement real? function
+        }
+        return nullptr;
+    }
+    Node_Token* is_number(Node_Token *cur, Node_Token *args, errorType &e) {
+        if (count_args(args) != 1)
+            throw Error(incorrect_number_of_arguments, "number?", "incorrect_number_of_arguments", 0, 0);
+        else {
+            // implement number? function
+        }
+        return nullptr;
+    }
+    Node_Token* is_string(Node_Token *cur, Node_Token *args, errorType &e) {
+        if (count_args(args) != 1)
+            throw Error(incorrect_number_of_arguments, "string?", "incorrect_number_of_arguments", 0, 0);
+        else {
+            // implement string? function
+        }
+        return nullptr;
+    }
+    Node_Token* is_boolean(Node_Token *cur, Node_Token *args, errorType &e) {
+        if (count_args(args) != 1)
+            throw Error(incorrect_number_of_arguments, "boolean?", "incorrect_number_of_arguments", 0, 0);
+        else {
+            // implement boolean? function
+        }
+        return nullptr;
+    }
+    Node_Token* is_symbol(Node_Token *cur, Node_Token *args, errorType &e) {
+        if (count_args(args) != 1)
+            throw Error(incorrect_number_of_arguments, "symbol?", "incorrect_number_of_arguments", 0, 0);
+        else {
+            // implement symbol? function
+        }
+        return nullptr;
+    }
     Node_Token* plus(Node_Token *cur, Node_Token *args, errorType &e) {
         Node_Token* node = new Node_Token();
         vector<Node_Token*> arg_list;
@@ -212,6 +343,9 @@ class FunctionExecutor {
         if (count_args(args) < 2)
             throw Error(incorrect_number_of_arguments, "/", "incorrect_number_of_arguments", 0, 0);
     }
+
+
+
 
     Node_Token* clean_environment(Node_Token *cur, Node_Token *args, errorType &e) {
         if (count_args(args) != 0)
@@ -1351,8 +1485,53 @@ public:
                 func_executor.multiply(cur, cur->right, e);
             else if (func_Token->token.value == "/")
                 func_executor.division(cur, cur->right, e);
+            else if (func_Token->token.value == "not")
+                func_executor.not_func(cur, cur->right, e);
+            else if (func_Token->token.value == "and")
+
+            else if (func_Token->token.value == "or")
+
+            else if (func_Token->token.value == "=")
+
+            else if (func_Token->token.value == "<")
+
+            else if (func_Token->token.value == ">")
+
+            else if (func_Token->token.value == "<=")
+
+            else if (func_Token->token.value == ">=")
+
+            else if (func_Token->token.value == "string-append")
+
+            else if (func_Token->token.value == "string>?")
+
+            else if (func_Token->token.value == "string<?")
+
+            else if (func_Token->token.value == "string=?")
+
+            else if (func_Token->token.value == "eqv?")
+                func_executor.eqv(cur, cur->right, e);
+            else if (func_Token->token.value == "equal?")
+                func_executor.equal(cur, cur->right, e);
+            else if (func_Token->token.value == "begin")
+                func_executor.begin(cur, cur->right, e);
+            else if (func_Token->token.value == "if")
+                func_executor.if_func(cur, cur->right, e);
+            else if (func_Token->token.value == "cond")
+                func_executor.cond(cur, cur->right, e);
+
             else if (func_Token->token.value == "clean-environment")
                 func_executor.clean_environment(cur, cur->right, e);
+            else { // undefined function
+                // cerr << "\033[1;33m" << "func_Token: " << func_Token->token.value << "\033[0m" << endl;
+                func_name = func_Token->token.value;
+                cerr << "\033[1;33m" << "func_name: " << func_name << "\033[0m" << endl;
+                if (Reserved_function_map.find(func_name) == Reserved_function_map.end()) {
+                    e = undefined_function;
+                    throw Error(undefined_function, func_name, func_name ,func_Token->token.line, func_Token->token.column);
+                }
+
+            }
 
         }
         else if (cur->left->token.type == DOT) {
@@ -1363,7 +1542,7 @@ public:
         }
 
 
-        Node_Token* func_Token = eval(t->left, e); // Evaluate the function token
+        /*Node_Token* func_Token = eval(t->left, e); // Evaluate the function token
         func_name = func_Token->token.value;
         cerr << "\033[1;33mfunc_Token: " << func_Token->token.value << "\033[0m" << endl;
 
@@ -1375,6 +1554,7 @@ public:
         args = eval_arg_list(arg_list, e, tree_util);// eval 參數，替換節點與釋放原本節點
         if (e != Error_None)
             return t;
+        */
         
         return global_func_executor.apply_function(func_name, args, e);
     }
