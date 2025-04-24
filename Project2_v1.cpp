@@ -56,9 +56,9 @@ enum errorType {
     unbound_symbol = 666,
     unbound_parameter = 667,
     no_return_value = 668,
+    unbound_test_condition = 669,
     division_by_zero = 0,
     non_list = 777,
-    
 
 
 
@@ -132,15 +132,14 @@ public:
             message = "ERROR (unbound parameter) : "; // Node_Token* r
         else if (t == no_return_value)
             message = "ERROR (no return value) : "; // Node_Token* r
+        else if (t == unbound_test_condition)
+            message = "ERROR (unbound-test condition) : "; // Node_Token* r
         else if (t == division_by_zero)
             message = "ERROR (division by zero) : " + e_token;
         else if (t == non_list)
             message = "ERROR (non-list) : "; // Node_Token* r
 
         
-        
-        
-
     }
     Node_Token * get_sub_error_tree() {
         return root;
@@ -247,23 +246,51 @@ class FunctionExecutor {
         return nullptr;
     }
     
-    Node_Token* is_atom(Node_Token *cur, Node_Token *args, errorType &e) {
+    Node_Token* judge_elements(string instr, Node_Token *cur, Node_Token *args, errorType &e) {
         Node_Token* node = new Node_Token();
-        vector<Node_Token*> arg_list;
-        bool float_flag = false;
         node->token.value = "#f";
         node->token.type = NIL;
 
         if (count_args(args) != 1)
-            throw Error(incorrect_number_of_arguments, "atom?", "incorrect_number_of_arguments", 0, 0);
+            throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
         else {
             if (args != nullptr && args->token.type != NIL) {
                 Node_Token *parameter = evalution(args->left, e);
                 // cerr << "\033[1;35m" << "parameter: " << parameter->token.value << "\033[0m" << endl;
-                if (is_ATOM(parameter->token.type)) {
-                    node->token.value = "#t";
-                    node->token.type = T;
+                if (instr == "atom?") {
+                    if (is_ATOM(parameter->token.type)) {
+                        node->token.value = "#t";
+                        node->token.type = T;
+                    }
                 }
+                else if (instr == "pair?") {
+
+                }
+                else if (instr == "list?") {
+
+                }
+                else if (instr == "null?") {
+
+                }
+                else if (instr == "integer?") {
+
+                }
+                else if (instr == "real?") {
+
+                }
+                else if (instr == "number?") {
+
+                }
+                else if (instr == "string?") {
+
+                }
+                else if (instr == "boolean?") {
+
+                }
+                else if (instr == "symbol?") {
+
+                }
+
             }
             
         }
@@ -790,7 +817,67 @@ class FunctionExecutor {
     }
 
 
+    Node_Token* if_func(string instr, Node_Token *cur, Node_Token *args, errorType &e) {
+        Node_Token* node = new Node_Token();
+        vector<Node_Token*> arg_list;
+        bool float_flag = false;
+        node->token.value = "#t";
+        node->token.type = T;
 
+        int c = count_args(args);
+        if (c != 2 && c != 3)
+            throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
+        else {
+            Node_Token *t = args;
+            while (t != nullptr && t->token.type != NIL) {
+                Node_Token *parameter = t->left;
+                // cerr << "\033[1;35m" << "parameter: " << parameter->token.value << "\033[0m" << endl;
+                try {
+                    arg_list.push_back(evalution(parameter, e));
+                }
+                catch (Error err) {
+                    // cerr << "\033[1;35m" << "error: " << err.type << "\033[0m" << endl;
+                    if (err.type == no_return_value) {
+                        // cerr << "\033[1;32m" << "error: " << "no return value" << "\033[0m" << endl;
+                        e = unbound_test_condition;
+                        throw Error(unbound_test_condition, instr, "unbound_test_condition", 0, 0, parameter);
+                    }
+                    else
+                        throw err;
+                }
+                // ! need ??????????
+                if (arg_list.back()->token.type == DOT) {
+                    e = incorrect_argument_type_list;
+                    string s = arg_list.back()->token.value;
+                    throw Error(incorrect_argument_type_list, instr, s, 0, 0, arg_list.back());
+                }
+                // ! need ??????????
+
+                t = t->right;
+            }
+        }
+
+        if (c == 2) {
+            if (arg_list.at(0)->token.type == NIL)
+                throw Error(no_return_value, instr, "no_return_value", 0, 0, cur);
+            else {
+                node->token.value = arg_list.at(1)->token.value;
+                node->token.type = arg_list.at(1)->token.type;
+            }
+        }
+        else if (c == 3) {
+            if (arg_list.at(0)->token.type == NIL) {
+                node->token.value = arg_list.at(2)->token.value;
+                node->token.type = arg_list.at(2)->token.type;
+            }
+            else {
+                node->token.value = arg_list.at(1)->token.value;
+                node->token.type = arg_list.at(1)->token.type;
+            }
+        }
+
+        return node;
+    }
     Node_Token* clean_environment(Node_Token *cur, Node_Token *args, errorType &e) {
         if (count_args(args) != 0)
             throw Error(incorrect_number_of_arguments, "clean-environment", "incorrect_number_of_arguments", 0, 0);
@@ -862,7 +949,25 @@ class FunctionExecutor {
 
             // else if (func_Token->token.value == "cdr")
             else if (func_Token->token.value == "atom?")
-                return is_atom(cur, cur->right, e);
+                return judge_elements("atom?", cur, cur->right, e);
+            else if (func_Token->token.value == "pair?")
+                return judge_elements("pair?", cur, cur->right, e);
+            else if (func_Token->token.value == "list?")
+                return judge_elements("list?", cur, cur->right, e);
+            else if (func_Token->token.value == "null?")
+                return judge_elements("null?", cur, cur->right, e);
+            else if (func_Token->token.value == "integer?")
+                return judge_elements("integer?", cur, cur->right, e);
+            else if (func_Token->token.value == "real?")
+                return judge_elements("real?", cur, cur->right, e);
+            else if (func_Token->token.value == "number?")
+                return judge_elements("number?", cur, cur->right, e);
+            else if (func_Token->token.value == "string?")
+                return judge_elements("string?", cur, cur->right, e);
+            else if (func_Token->token.value == "boolean?")
+                return judge_elements("boolean?", cur, cur->right, e);
+            else if (func_Token->token.value == "symbol?")
+                return judge_elements("symbol?", cur, cur->right, e);
 
             else if (func_Token->token.value == "+")
                 return implement_arithmetic("+", cur, cur->right, e);
@@ -903,8 +1008,8 @@ class FunctionExecutor {
             //     return equal(cur, cur->right, e);
             // else if (func_Token->token.value == "begin")
             //     return begin(cur, cur->right, e);
-            // else if (func_Token->token.value == "if")
-            //     return if_func(cur, cur->right, e);
+            else if (func_Token->token.value == "if")
+                return if_func("if", cur, cur->right, e);
             // else if (func_Token->token.value == "cond")
             //     return cond(cur, cur->right, e);
 
@@ -2005,9 +2110,9 @@ public:
         }
         int countquote = 0;
 
-        cerr << "\033[1;34menter pretty_print\033[0m" << endl;
+        // cerr << "\033[1;34menter pretty_print\033[0m" << endl;
         pretty_print(root, countquote);
-        cerr << "\033[1;34mend pretty_print\033[0m" << endl;
+        // cerr << "\033[1;34mend pretty_print\033[0m" << endl;
     }
     void print(Node_Token * r) {
         // root = tree.get_root();
@@ -2797,6 +2902,12 @@ int main() {
                     break;
                 case no_return_value:
                     cerr << "\033[1;31m" << "no_return_value" << "\033[0m" << endl;
+                    cout << e.message;
+                    Syntax.print(e.get_sub_error_tree());
+                    Lexical.reset();
+                    break;
+                case unbound_test_condition:
+                    cerr << "\033[1;31m" << "unbound_test_condition" << "\033[0m" << endl;
                     cout << e.message;
                     Syntax.print(e.get_sub_error_tree());
                     Lexical.reset();
