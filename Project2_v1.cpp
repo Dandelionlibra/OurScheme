@@ -820,7 +820,7 @@ class FunctionExecutor {
                         e = incorrect_argument_type_list;
                         string s = arg_list.back()->token.value;
                         if (s == "#f") s = "nil";
-                        throw Error(incorrect_argument_type_list, instr, s, 0, 0);
+                        throw Error(incorrect_argument_type_list, instr, s, 0, 0, arg_list.back());
                     }
                 }
                 catch (Error err) {
@@ -848,19 +848,48 @@ class FunctionExecutor {
             }
             else if (instr == "string>?") {
                 if (i == 0) continue;
-                else if (arg_list.at(i)->token.value <= arg_list.at(i-1)->token.value) {
-                    node->token.value = "#f";
-                    node->token.type = NIL;
-                    return node;
+                else {
+                    int same = 0;
+                    for (int j = 0 ; j < arg_list.at(i-1)->token.value.size() && j < arg_list.at(i)->token.value.size() ; j++) {
+                        if (arg_list.at(i-1)->token.value[j] < arg_list.at(i)->token.value[j]) {
+                            node->token.value = "#f";
+                            node->token.type = NIL;
+                            return node;
+                        }
+                        else if (arg_list.at(i-1)->token.value[j] == arg_list.at(i)->token.value[j])
+                            same++;
+                        
+                    }
+                    if (same == arg_list.at(i-1)->token.value.size() && same == arg_list.at(i)->token.value.size() || 
+                        (same == arg_list.at(i-1)->token.value.size() && arg_list.at(i-1)->token.value.size() < arg_list.at(i)->token.value.size())) {
+                        node->token.value = "#f";
+                        node->token.type = NIL;
+                        return node;
+                    }
                 }
                 
             }
             else if (instr == "string<?") {
                 if (i == 0) continue;
-                else if (arg_list.at(i)->token.value >= arg_list.at(i-1)->token.value) {
-                    node->token.value = "#f";
-                    node->token.type = NIL;
-                    return node;
+                else {
+                    int same = 0;
+                    for (int j = 0 ; j < arg_list.at(i-1)->token.value.size() && j < arg_list.at(i)->token.value.size() ; j++) {
+                        if (arg_list.at(i-1)->token.value[j] > arg_list.at(i)->token.value[j]) {
+                            node->token.value = "#f";
+                            node->token.type = NIL;
+                            return node;
+                        }
+                        else if (arg_list.at(i-1)->token.value[j] == arg_list.at(i)->token.value[j])
+                            same++;
+                        
+                    }
+                    if (same == arg_list.at(i-1)->token.value.size() && same == arg_list.at(i)->token.value.size() || 
+                        same == arg_list.at(i-1)->token.value.size() && arg_list.at(i-1)->token.value.size() > arg_list.at(i)->token.value.size()) {
+                        node->token.value = "#f";
+                        node->token.type = NIL;
+                        return node;
+                    }
+                    
                 }
             }
             else if (instr == "string=?") {
