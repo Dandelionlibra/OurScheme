@@ -254,8 +254,21 @@ class FunctionExecutor {
         if (count_args(args) != 1)
             throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
         else {
+            
             if (args != nullptr && args->token.type != NIL) {
-                Node_Token *parameter = evalution(args->left, e);
+                Node_Token *parameter = args->left;
+                try {
+                    parameter = evalution(args->left, e);
+                }
+                catch (Error err) {
+                    // cerr << "\033[1;35m" << "error: " << error << "\033[0m" << endl;
+                    if (e == no_return_value) {
+                        e = unbound_parameter;
+                        throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, parameter);
+                    }
+                    else
+                        throw err;
+                }
                 // cerr << "\033[1;35m" << "parameter: " << parameter->token.value << "\033[0m" << endl;
                 if (instr == "atom?") {
                     if (is_ATOM(parameter->token.type)) {
@@ -264,31 +277,59 @@ class FunctionExecutor {
                     }
                 }
                 else if (instr == "pair?") {
-
+                    if (parameter->token.type == DOT) {
+                        node->token.value = "#t";
+                        node->token.type = T;
+                    }
                 }
                 else if (instr == "list?") {
-
+                    if (parameter->token.type == DOT) {
+                        Node_Token *tmp = parameter;
+                        while (tmp->right != nullptr)
+                            tmp = tmp->right;
+                        
+                        if (tmp->token.type == NIL) {
+                            node->token.value = "#t";
+                            node->token.type = T;
+                        }
+                        
+                    }
                 }
                 else if (instr == "null?") {
-
+                    if (parameter->token.type == NIL) {
+                        node->token.value = "#t";
+                        node->token.type = T;
+                    }
                 }
                 else if (instr == "integer?") {
-
+                    if (parameter->token.type == INT) {
+                        node->token.value = "#t";
+                        node->token.type = T;
+                    }
                 }
-                else if (instr == "real?") {
-
-                }
-                else if (instr == "number?") {
-
+                else if (instr == "real?" || instr == "number?") {
+                    if (parameter->token.type == INT || parameter->token.type == FLOAT) {
+                        node->token.value = "#t";
+                        node->token.type = T;
+                    }
                 }
                 else if (instr == "string?") {
-
+                    if (parameter->token.type == STRING) {
+                        node->token.value = "#t";
+                        node->token.type = T;
+                    }
                 }
                 else if (instr == "boolean?") {
-
+                    if (parameter->token.type == T || parameter->token.type == NIL) {
+                        node->token.value = "#t";
+                        node->token.type = T;
+                    }
                 }
                 else if (instr == "symbol?") {
-
+                    if (parameter->token.type == SYMBOL) {
+                        node->token.value = "#t";
+                        node->token.type = T;
+                    }
                 }
 
             }
