@@ -221,25 +221,41 @@ class FunctionExecutor {
         }
         return nullptr;
     }
-    Node_Token* list(Node_Token *cur, Node_Token *args, errorType &e) {
+    // ! (list '(4 5))
+    Node_Token* list_func(string instr, Node_Token *cur, Node_Token *args, errorType &e) {
+        Node_Token* node = new Node_Token();
         if (count_args(args) < 1)
-            throw Error(incorrect_number_of_arguments, "list", "incorrect_number_of_arguments", 0, 0);
+            throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
         else {
-            // implement list function
+            if (args != nullptr && args->token.type != NIL) {
+                Node_Token *parameter = args->left;
+                try {
+                    parameter = evalution(args->left, e);
+                }
+                catch (Error err) {
+                    // cerr << "\033[1;35m" << "error: " << error << "\033[0m" << endl;
+                    if (e == no_return_value) {
+                        e = unbound_parameter;
+                        throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, parameter);
+                    }
+                    else
+                        throw err;
+                }
+            }
         }
-        return nullptr;
+        return args;
     }
-    Node_Token* car(Node_Token *cur, Node_Token *args, errorType &e) {
+    Node_Token* car(string instr, Node_Token *cur, Node_Token *args, errorType &e) {
         if (count_args(args) != 1)
-            throw Error(incorrect_number_of_arguments, "car", "incorrect_number_of_arguments", 0, 0);
+            throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
         else {
             // implement car function
         }
         return nullptr;
     }
-    Node_Token* cdr(Node_Token *cur, Node_Token *args, errorType &e) {
+    Node_Token* cdr(string instr, Node_Token *cur, Node_Token *args, errorType &e) {
         if (count_args(args) != 1)
-            throw Error(incorrect_number_of_arguments, "cdr", "incorrect_number_of_arguments", 0, 0);
+            throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
         else {
             // implement cdr function
         }
@@ -785,6 +801,80 @@ class FunctionExecutor {
         return node;
     }
 
+    Node_Token* str_operator(string instr, Node_Token *cur, Node_Token *args, errorType &e) {
+        Node_Token* node = new Node_Token();
+        vector<Node_Token*> arg_list;
+        node->token.value = "#t";
+        node->token.type = T;
+
+        if (count_args(args) < 2)
+            throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
+        else {
+            Node_Token *t = args;
+            while (t != nullptr && t->token.type != NIL) {
+                Node_Token *parameter = t->left;
+                // cerr << "\033[1;35m" << "parameter: " << parameter->token.value << "\033[0m" << endl;
+                try {
+                    arg_list.push_back(evalution(parameter, e));
+                    if (arg_list.back()->token.type != STRING) {
+                        e = incorrect_argument_type_list;
+                        string s = arg_list.back()->token.value;
+                        if (s == "#f") s = "nil";
+                        throw Error(incorrect_argument_type_list, instr, s, 0, 0);
+                    }
+                }
+                catch (Error err) {
+                    // cerr << "\033[1;35m" << "error: " << err.type << "\033[0m" << endl;
+                    if (err.type == no_return_value) {
+                        // cerr << "\033[1;32m" << "error: " << "no return value" << "\033[0m" << endl;
+                        e = unbound_parameter;
+                        throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, parameter);
+                    }
+                    else
+                        throw err;
+                }
+                t = t->right;
+            }
+        }
+
+        for (int i = 0 ; i < arg_list.size() ; i++) {
+            if (instr == "string-append") {
+                if (i == 0) {
+                    node->token.value = arg_list.at(i)->token.value.substr(1, arg_list.at(i)->token.value.size() - 2);
+                    node->token.type = STRING;
+                }
+                else node->token.value += arg_list.at(i)->token.value.substr(1, arg_list.at(i)->token.value.size() - 2);
+                
+            }
+            else if (instr == "string>?") {
+                if (i == 0) continue;
+                else if (arg_list.at(i)->token.value <= arg_list.at(i-1)->token.value) {
+                    node->token.value = "#f";
+                    node->token.type = NIL;
+                    return node;
+                }
+                
+            }
+            else if (instr == "string<?") {
+                if (i == 0) continue;
+                else if (arg_list.at(i)->token.value >= arg_list.at(i-1)->token.value) {
+                    node->token.value = "#f";
+                    node->token.type = NIL;
+                    return node;
+                }
+            }
+            else if (instr == "string=?") {
+                if (i == 0) continue;
+                else if (arg_list.at(i)->token.value != arg_list.at(i-1)->token.value) {
+                    node->token.value = "#f";
+                    node->token.type = NIL;
+                    return node;
+                }
+            }
+        }
+
+        return node;
+    }
 
     Node_Token* if_func(string instr, Node_Token *cur, Node_Token *args, errorType &e) {
         Node_Token* node = new Node_Token();
@@ -847,6 +937,55 @@ class FunctionExecutor {
 
         return node;
     }
+    Node_Token* cond_func(string instr, Node_Token *cur, Node_Token *args, errorType &e) {
+        Node_Token* node = new Node_Token();
+        vector<Node_Token*> arg_list;
+        
+        // if (count_args(args) < 1)
+        //     throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
+        if (args->left == nullptr) // count_args(args) < 1
+            throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
+        else {
+            Node_Token *t = args;
+            while (t != nullptr && t->token.type != NIL) {
+                Node_Token *parameter = t->left;
+                // cerr << "\033[1;35m" << "parameter: " << parameter->token.value << "\033[0m" << endl;
+                try {
+                    arg_list.push_back(evalution(parameter, e));
+                }
+                catch (Error err) {
+                    // cerr << "\033[1;35m" << "error: " << error << "\033[0m" << endl;
+                    if (e == no_return_value && t->right) {
+                        e = no_return_value;
+                        throw Error(no_return_value, instr, "no_return_value", 0, 0, cur);
+                    }
+                    else
+                        throw err;
+                }
+                // ! need ??????????
+                if (arg_list.back()->token.type == DOT) {
+                    e = incorrect_argument_type_list;
+                    string s = arg_list.back()->token.value;
+                    throw Error(incorrect_argument_type_list, instr, s, 0, 0, arg_list.back());
+                }
+                // ! need ??????????
+
+                t = t->right;
+            }
+        }
+
+        for (int i = 0 ; i < arg_list.size() ; i++){
+            if (arg_list.at(i)->token.type == NIL)
+                continue;
+            else {
+                node->token.value = arg_list.at(i)->token.value;
+                node->token.type = arg_list.at(i)->token.type;
+                return node;
+            }
+        }
+
+        return node;
+    }
     Node_Token* clean_environment(Node_Token *cur, Node_Token *args, errorType &e) {
         if (count_args(args) != 0)
             throw Error(incorrect_number_of_arguments, "clean-environment", "incorrect_number_of_arguments", 0, 0);
@@ -857,6 +996,7 @@ class FunctionExecutor {
     }
 
     Node_Token* evalution(Node_Token *cur, errorType &e) {
+        cerr << "-------- enter evalution --------" <<endl;
         if (cur == nullptr) return nullptr;
 
         string func_name;
@@ -912,11 +1052,13 @@ class FunctionExecutor {
 
             // else if (func_Token->token.value == "lambda")
             
-            // else if (func_Token->token.value == "list")
+            else if (func_Token->token.value == "list")
+                return list_func("list", cur, cur->right, e);
+            else if (func_Token->token.value == "car")
+                return car("car", cur, cur->right, e);
+            else if (func_Token->token.value == "cdr")
+                return cdr("cdr", cur, cur->right, e);
 
-            // else if (func_Token->token.value == "car")
-
-            // else if (func_Token->token.value == "cdr")
             else if (func_Token->token.value == "atom?")
                 return judge_elements("atom?", cur, cur->right, e);
             else if (func_Token->token.value == "pair?")
@@ -963,13 +1105,14 @@ class FunctionExecutor {
                 return smaller_equal_func(cur, cur->right, e);
             else if (func_Token->token.value == ">=")
                 return bigger_equal_func(cur, cur->right, e);
-            // else if (func_Token->token.value == "string-append")
-
-            // else if (func_Token->token.value == "string>?")
-
-            // else if (func_Token->token.value == "string<?")
-
-            // else if (func_Token->token.value == "string=?")
+            else if (func_Token->token.value == "string-append")
+                return str_operator("string-append", cur, cur->right, e);
+            else if (func_Token->token.value == "string>?")
+                return str_operator("string>?", cur, cur->right, e);
+            else if (func_Token->token.value == "string<?")
+                return str_operator("string<?", cur, cur->right, e);
+            else if (func_Token->token.value == "string=?")
+                return str_operator("string=?", cur, cur->right, e);
 
             // else if (func_Token->token.value == "eqv?")
             //     return eqv(cur, cur->right, e);
@@ -979,8 +1122,8 @@ class FunctionExecutor {
             //     return begin(cur, cur->right, e);
             else if (func_Token->token.value == "if")
                 return if_func("if", cur, cur->right, e);
-            // else if (func_Token->token.value == "cond")
-            //     return cond(cur, cur->right, e);
+            else if (func_Token->token.value == "cond")
+                return cond_func("cond", cur, cur->right, e);
 
             else if (func_Token->token.value == "clean-environment")
                 return clean_environment(cur, cur->right, e);
@@ -997,7 +1140,9 @@ class FunctionExecutor {
 
         }
         else if (cur->left->token.type == DOT) {
-            
+            cerr << "------ DOT ---------" << endl;
+            cerr << "\033[1;33m" << "DOT: " << cur->left->left->token.value << "\033[0m" << endl;
+            return evalution(cur->left, e); // Return the right child of the dot node
         }
         else if (cur->left->token.type == QUOTE) {
             // cerr << "\033[1;33m" << "QUOTE: " << cur->right->token.value << "\033[0m" << endl;
