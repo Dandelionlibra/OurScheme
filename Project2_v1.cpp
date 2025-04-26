@@ -60,7 +60,9 @@ enum errorType {
     division_by_zero = 0,
     non_list = 777,
 
-
+    defined = 888,
+    error_level_define = 889,
+    error_define_format = 890,
 
     Error_None = 99999
 };
@@ -138,6 +140,13 @@ public:
             message = "ERROR (division by zero) : " + e_token;
         else if (t == non_list)
             message = "ERROR (non-list) : "; // Node_Token* r
+        else if (t == defined)
+            message = e_token + " defined";
+        else if (t == error_level_define)
+            message = "ERROR (level of DEFINE)";
+        else if (t == error_define_format)
+            message = "ERROR (DEFINE format) : "; // Node_Token* r
+        
 
         
     }
@@ -165,12 +174,19 @@ set<string> bulid_in_func = { // only bulid-in function
     "clean-environment"
 };
 set <string> func; // all function name, unclude self-defined function
-unordered_map<string, Node_Token*> vars_correspond_table; // store the variable name and value
-
+unordered_map<string, Node_Token*> defined_table; // store the variable name and value
+vector<Node_Token*> define_trees;
+set <Node_Token*> pointer_gather; // store the variable name and value
 // void test(string str_index, string str, TokenType type) {
 //     variable var = {str, type};
 //     vars_correspond_table.insert({str_index, var});
 // }
+void clear_pointer_gather() {
+    for (auto it = pointer_gather.begin(); it != pointer_gather.end(); ) {
+        delete *it;
+        it = pointer_gather.erase(it);
+    }
+}
 
 class FunctionExecutor {
     private:
@@ -194,18 +210,133 @@ class FunctionExecutor {
         // QUOTE、DOT
         return false;
     }
+    Node_Token* eval_left(Node_Token *cur, Node_Token *args, errorType &e) {
+        Node_Token* node = new Node_Token();
+        pointer_gather.insert(node);
+        node->token.type = NIL;
+        node->token.value = "#f";
+
+        if (count_args(args) != 1)
+            throw Error(incorrect_number_of_arguments, "eval_left", "incorrect_number_of_arguments", 0, 0);
+        else {
+            Node_Token *t = args;
+            Node_Token *parameter = t->left;
+            if (parameter->token.type == NIL) {
+                node->token.type = T;
+                node->token.value = "#t";
+            }
+        }
+        return node;
+    }
+    bool is_equ_address(Node_Token *arg1, Node_Token *arg2) {
+        if (arg1 == nullptr && arg2 == nullptr) 
+            return true;
+        else if (arg1 == nullptr && arg2 != nullptr)
+            return false;
+        else if (arg1 != nullptr && arg2 == nullptr)
+            return false;
+        else if (arg1->token.type == INT || arg1->token.type == FLOAT || arg1->token.type == STRING) {
+            if (arg1->token.type == arg2->token.type && arg1->token.value == arg2->token.value)
+                // cerr << "\033[1;35m" << "arg1->token.value: " << arg1->token.value << "\033[0m" << endl;
+                // cerr << "\033[1;35m" << "arg2->token.value: " << arg2->token.value << "\033[0m" << endl;
+                return is_equ_address(arg1->left, arg2->left) && is_equ_address(arg1->right, arg2->right);
+            else
+                return false;
+        }
+        else if (arg1 != arg2)
+            return false;
+        else 
+            return is_equ_address(arg1->left, arg2->left) && is_equ_address(arg1->right, arg2->right);
+
+        return is_equ_address(arg1->left, arg2->left) && is_equ_address(arg1->right, arg2->right);
+    }
+    bool is_equ(Node_Token *arg1, Node_Token *arg2) {
+        if (arg1 == nullptr && arg2 == nullptr) 
+            return true;
+        else if (arg1 == nullptr && arg2 != nullptr)
+            return false;
+        else if (arg1 != nullptr && arg2 == nullptr)
+            return false;
+        
+        else if (arg1->token.type != arg2->token.type || arg1->token.value != arg2->token.value)
+            return false;
+        else 
+            return is_equ(arg1->left, arg2->left) && is_equ(arg1->right, arg2->right);
+
+        return is_equ(arg1->left, arg2->left) && is_equ(arg1->right, arg2->right);
+    }
 
     public:
-    Node_Token* define_func(Node_Token *cur, Node_Token *args, errorType &e) {
-        if (count_args(args) != 2)
-            throw Error(incorrect_number_of_arguments, "define", "incorrect_number_of_arguments", 0, 0);
+    Node_Token* define_func(string instr, Node_Token *cur, Node_Token *args, errorType &e) {
+        vector<Node_Token*> arg_list;
+        if (count_args(args) != 2) {
+            e = error_define_format;
+            throw Error(error_define_format, "define", "error_define_format", 0, 0, cur);
+        }
         else {
-            // implement define function
+            Node_Token *t = args;
+            // ! while (t != nullptr && t->token.type != NIL)
+            for (int i = 0 ; i < 2 ; i++) {
+                Node_Token *parameter = t->left;
+                try {
+                    if (i == 0) {
+                        if (parameter->token.type != SYMBOL && parameter->token.type != DOT) {
+                            e = error_define_format;
+                            throw Error(error_define_format, "define", "error_define_format", 0, 0, cur);
+                        }
+                        else if (parameter->token.type == DOT) {
+                            // proj 3
+                        }
+                        else if (parameter->token.type == SYMBOL) {
+                            // proj 3
+                        }
+                    }
+                    
+                }
+                catch (Error err) {
+                    // cerr << "\033[1;35m" << "error: " << error << "\033[0m" << endl;
+                    if (e == no_return_value) {
+                        e = unbound_parameter;
+                        throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, parameter);
+                    }
+                    else if (e == defined || e == error_level_define || e == error_define_format) {
+                        e = error_level_define;
+                        throw Error(error_level_define, instr, "error_level_define", 0, 0);
+                    }
+                    else if (i == 0 && e == unbound_symbol) {
+                        e = Error_None;
+                        continue;
+                    }
+                    else
+                        throw err;
+                }
+
+                if (i == 0 && arg_list.at(0)->token.type != SYMBOL) {
+                    cerr << "\033[1;35m" << "arg_list.at(0)->token.type: " << arg_list.at(0)->token.type << "\033[0m" << endl;
+                    e = error_define_format;
+                    throw Error(error_define_format, "define", "error_define_format", 0, 0, cur);
+                }
+                else if (i == 1) {
+                    if (defined_table.find(arg_list.at(0)->token.value) != defined_table.end()) {
+
+                        defined_table.erase(arg_list.at(0)->token.value);
+                    }
+                    else defined_table.insert({arg_list.at(0)->token.value, arg_list.at(1)});
+                }
+                t = t->right;
+            }
+            
+            
         }
         return nullptr;
     }
 
     Node_Token* cons(Node_Token *cur, Node_Token *args, errorType &e) {
+        Node_Token* node = new Node_Token();
+        pointer_gather.insert(node);
+        vector<Node_Token*> arg_list;
+        cerr << "\033[1;35m" << "cons unwritten yet." << "\033[0m" << endl;
+
         if (count_args(args) != 2)
             throw Error(incorrect_number_of_arguments, "cons", "incorrect_number_of_arguments", 0, 0);
         else {
@@ -214,6 +345,11 @@ class FunctionExecutor {
         return nullptr;
     }
     Node_Token* lambda(Node_Token *cur, Node_Token *args, errorType &e) {
+        Node_Token* node = new Node_Token();
+        pointer_gather.insert(node);
+        vector<Node_Token*> arg_list;
+        cerr << "\033[1;35m" << "lambda unwritten yet." << "\033[0m" << endl;
+
         if (count_args(args) != 2)
             throw Error(incorrect_number_of_arguments, "lambda", "incorrect_number_of_arguments", 0, 0);
         else {
@@ -224,6 +360,7 @@ class FunctionExecutor {
     // ! (list '(4 5))
     Node_Token* list_func(string instr, Node_Token *cur, Node_Token *args, errorType &e) {
         Node_Token* node = new Node_Token();
+        pointer_gather.insert(node);
         if (count_args(args) < 1)
             throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
         else {
@@ -238,6 +375,10 @@ class FunctionExecutor {
                         e = unbound_parameter;
                         throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, parameter);
                     }
+                    else if (e == defined || e == error_level_define || e == error_define_format) {
+                        e = error_level_define;
+                        throw Error(error_level_define, instr, "error_level_define", 0, 0);
+                    }
                     else
                         throw err;
                 }
@@ -246,6 +387,11 @@ class FunctionExecutor {
         return args;
     }
     Node_Token* car(string instr, Node_Token *cur, Node_Token *args, errorType &e) {
+        Node_Token* node = new Node_Token();
+        pointer_gather.insert(node);
+        vector<Node_Token*> arg_list;
+        cerr << "\033[1;35m" << "car unwritten yet." << "\033[0m" << endl;
+        
         if (count_args(args) != 1)
             throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
         else {
@@ -254,6 +400,11 @@ class FunctionExecutor {
         return nullptr;
     }
     Node_Token* cdr(string instr, Node_Token *cur, Node_Token *args, errorType &e) {
+        Node_Token* node = new Node_Token();
+        pointer_gather.insert(node);
+        vector<Node_Token*> arg_list;
+        cerr << "\033[1;35m" << "cdr unwritten yet." << "\033[0m" << endl;
+        
         if (count_args(args) != 1)
             throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
         else {
@@ -264,6 +415,7 @@ class FunctionExecutor {
     
     Node_Token* judge_elements(string instr, Node_Token *cur, Node_Token *args, errorType &e) {
         Node_Token* node = new Node_Token();
+        pointer_gather.insert(node);
         node->token.value = "#f";
         node->token.type = NIL;
 
@@ -281,6 +433,10 @@ class FunctionExecutor {
                     if (e == no_return_value) {
                         e = unbound_parameter;
                         throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, parameter);
+                    }
+                    else if (e == defined || e == error_level_define || e == error_define_format) {
+                        e = error_level_define;
+                        throw Error(error_level_define, instr, "error_level_define", 0, 0);
                     }
                     else
                         throw err;
@@ -358,6 +514,7 @@ class FunctionExecutor {
     // > ERROR (/ with incorrect argument type) : #<procedure +>
     Node_Token* implement_arithmetic(string instr, Node_Token *cur, Node_Token *args, errorType &e) {
         Node_Token* node = new Node_Token();
+        pointer_gather.insert(node);
         vector<Node_Token*> arg_list;
         bool float_flag = false;
 
@@ -376,6 +533,10 @@ class FunctionExecutor {
                     if (e == no_return_value) {
                         e = unbound_parameter;
                         throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, parameter);
+                    }
+                    else if (e == defined || e == error_level_define || e == error_define_format) {
+                        e = error_level_define;
+                        throw Error(error_level_define, instr, "error_level_define", 0, 0);
                     }
                     else
                         throw err;
@@ -450,7 +611,6 @@ class FunctionExecutor {
 
         return node;
     }
-
 
     Node_Token* not_func(Node_Token *cur, Node_Token *args, errorType &e) {
         Node_Token* node = new Node_Token();
@@ -534,15 +694,16 @@ class FunctionExecutor {
         return node;
     }
 
-    Node_Token* equal_func(Node_Token *cur, Node_Token *args, errorType &e) {
+    Node_Token* compare_func(string instr, Node_Token *cur, Node_Token *args, errorType &e) {
         Node_Token* node = new Node_Token();
+        pointer_gather.insert(node);
         vector<Node_Token*> arg_list;
         bool float_flag = false;
         node->token.value = "#t";
         node->token.type = T;
 
         if (count_args(args) < 2)
-            throw Error(incorrect_number_of_arguments, "=", "incorrect_number_of_arguments", 0, 0);
+            throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
         else {
             Node_Token *t = args;
             while (t != nullptr && t->token.type != NIL) {
@@ -557,72 +718,49 @@ class FunctionExecutor {
                     e = incorrect_argument_type;
                     string s = arg_list.back()->token.value;
                     if (s == "#f") s = "nil";
-                    throw Error(incorrect_argument_type, "=", s, 0, 0);
+                    throw Error(incorrect_argument_type, instr, s, 0, 0);
                 }
                 t = t->right;
             }
         }
-        
+
         if (float_flag) {
             double current = stod(arg_list.at(0)->token.value);
             for (int i = 1 ; i < arg_list.size() ; i++) {
-                if (current != stod(arg_list.at(i)->token.value)) {
-                    node->token.value = "#f";
-                    node->token.type = NIL;
-                    return node;
+                if (instr == "=") {
+                    if (current != stod(arg_list.at(i)->token.value)) {
+                        node->token.value = "#f";
+                        node->token.type = NIL;
+                        return node;
+                    }
                 }
-                
-            }
-        }
-        else {
-            int current = stoi(arg_list.at(0)->token.value);
-            for (int i = 1 ; i < arg_list.size() ; i++) {
-                if (current != stoi(arg_list.at(i)->token.value)) {
-                    node->token.value = "#f";
-                    node->token.type = NIL;
-                    return node;
+                else if (instr == "<") {
+                    if (current >= stod(arg_list.at(i)->token.value)) {
+                        node->token.value = "#f";
+                        node->token.type = NIL;
+                        return node;
+                    }
                 }
-                
-            }
-        }
-
-        return node;
-    }
-    Node_Token* smaller_func(Node_Token *cur, Node_Token *args, errorType &e) {
-        Node_Token* node = new Node_Token();
-        vector<Node_Token*> arg_list;
-        bool float_flag = false;
-        node->token.value = "#t";
-        node->token.type = T;
-
-        if (count_args(args) < 2)
-            throw Error(incorrect_number_of_arguments, "<", "incorrect_number_of_arguments", 0, 0);
-        else {
-            Node_Token *t = args;
-            while (t != nullptr && t->token.type != NIL) {
-                Node_Token *parameter = t->left;
-                // cerr << "\033[1;35m" << "parameter: " << parameter->token.value << "\033[0m" << endl;
-                arg_list.push_back(evalution(parameter, e));
-                
-                if(arg_list.back()->token.type == FLOAT)
-                    float_flag = true;
-                else if (arg_list.back()->token.type == T || arg_list.back()->token.type == NIL) {
-                    // ERROR (+ with incorrect argument type) : #t
-                    e = incorrect_argument_type;
-                    string s = arg_list.back()->token.value;
-                    if (s == "#f") s = "nil";
-                    throw Error(incorrect_argument_type, "<", s, 0, 0);
+                else if (instr == ">") {
+                    if (current <= stod(arg_list.at(i)->token.value)) {
+                        node->token.value = "#f";
+                        node->token.type = NIL;
+                        return node;
+                    }
                 }
-                t = t->right;
-            }
-        }
-        if (float_flag) {
-            double current = stod(arg_list.at(0)->token.value);
-            for (int i = 1 ; i < arg_list.size() ; i++) {
-                if (current >= stod(arg_list.at(i)->token.value)) {
-                    node->token.value = "#f";
-                    node->token.type = NIL;
-                    return node;
+                else if (instr == "<=") {
+                    if (current > stod(arg_list.at(i)->token.value)) {
+                        node->token.value = "#f";
+                        node->token.type = NIL;
+                        return node;
+                    }
+                }
+                else if (instr == ">=") {
+                    if (current < stod(arg_list.at(i)->token.value)) {
+                        node->token.value = "#f";
+                        node->token.type = NIL;
+                        return node;
+                    }
                 }
                 current = stod(arg_list.at(i)->token.value);
             }
@@ -630,10 +768,40 @@ class FunctionExecutor {
         else {
             int current = stoi(arg_list.at(0)->token.value);
             for (int i = 1 ; i < arg_list.size() ; i++) {
-                if (current >= stoi(arg_list.at(i)->token.value)) {
-                    node->token.value = "#f";
-                    node->token.type = NIL;
-                    return node;
+                if (instr == "=") {
+                    if (current != stoi(arg_list.at(i)->token.value)) {
+                        node->token.value = "#f";
+                        node->token.type = NIL;
+                        return node;
+                    }
+                }
+                else if (instr == "<") {
+                    if (current >= stoi(arg_list.at(i)->token.value)) {
+                        node->token.value = "#f";
+                        node->token.type = NIL;
+                        return node;
+                    }
+                }
+                else if (instr == ">") {
+                    if (current <= stoi(arg_list.at(i)->token.value)) {
+                        node->token.value = "#f";
+                        node->token.type = NIL;
+                        return node;
+                    }
+                }
+                else if (instr == "<=") {
+                    if (current > stoi(arg_list.at(i)->token.value)) {
+                        node->token.value = "#f";
+                        node->token.type = NIL;
+                        return node;
+                    }
+                }
+                else if (instr == ">=") {
+                    if (current < stoi(arg_list.at(i)->token.value)) {
+                        node->token.value = "#f";
+                        node->token.type = NIL;
+                        return node;
+                    }
                 }
                 current = stoi(arg_list.at(i)->token.value);
             }
@@ -641,168 +809,9 @@ class FunctionExecutor {
 
         return node;
     }
-    Node_Token* bigger_func(Node_Token *cur, Node_Token *args, errorType &e) {
-        Node_Token* node = new Node_Token();
-        vector<Node_Token*> arg_list;
-        bool float_flag = false;
-        node->token.value = "#t";
-        node->token.type = T;
-
-        if (count_args(args) < 2)
-            throw Error(incorrect_number_of_arguments, ">", "incorrect_number_of_arguments", 0, 0);
-        else {
-            Node_Token *t = args;
-            while (t != nullptr && t->token.type != NIL) {
-                Node_Token *parameter = t->left;
-                // cerr << "\033[1;35m" << "parameter: " << parameter->token.value << "\033[0m" << endl;
-                arg_list.push_back(evalution(parameter, e));
-                
-                if(arg_list.back()->token.type == FLOAT)
-                    float_flag = true;
-                else if (arg_list.back()->token.type == T || arg_list.back()->token.type == NIL) {
-                    // ERROR (+ with incorrect argument type) : #t
-                    e = incorrect_argument_type;
-                    string s = arg_list.back()->token.value;
-                    if (s == "#f") s = "nil";
-                    throw Error(incorrect_argument_type, ">", s, 0, 0);
-                }
-                t = t->right;
-            }
-        }
-        if (float_flag) {
-            double current = stod(arg_list.at(0)->token.value);
-            for (int i = 1 ; i < arg_list.size() ; i++) {
-                if (current <= stod(arg_list.at(i)->token.value)) {
-                    node->token.value = "#f";
-                    node->token.type = NIL;
-                    return node;
-                }
-                current = stod(arg_list.at(i)->token.value);
-            }
-        }
-        else {
-            int current = stoi(arg_list.at(0)->token.value);
-            for (int i = 1 ; i < arg_list.size() ; i++) {
-                if (current <= stoi(arg_list.at(i)->token.value)) {
-                    node->token.value = "#f";
-                    node->token.type = NIL;
-                    return node;
-                }
-                current = stoi(arg_list.at(i)->token.value);
-            }
-        }
-
-        return node;
-    }
-    Node_Token* smaller_equal_func(Node_Token *cur, Node_Token *args, errorType &e) {
-        Node_Token* node = new Node_Token();
-        vector<Node_Token*> arg_list;
-        bool float_flag = false;
-        node->token.value = "#t";
-        node->token.type = T;
-
-        if (count_args(args) < 2)
-            throw Error(incorrect_number_of_arguments, "<=", "incorrect_number_of_arguments", 0, 0);
-        else {
-            Node_Token *t = args;
-            while (t != nullptr && t->token.type != NIL) {
-                Node_Token *parameter = t->left;
-                // cerr << "\033[1;35m" << "parameter: " << parameter->token.value << "\033[0m" << endl;
-                arg_list.push_back(evalution(parameter, e));
-                
-                if(arg_list.back()->token.type == FLOAT)
-                    float_flag = true;
-                else if (arg_list.back()->token.type == T || arg_list.back()->token.type == NIL) {
-                    // ERROR (+ with incorrect argument type) : #t
-                    e = incorrect_argument_type;
-                    string s = arg_list.back()->token.value;
-                    if (s == "#f") s = "nil";
-                    throw Error(incorrect_argument_type, "<=", s, 0, 0);
-                }
-                t = t->right;
-            }
-        }
-        if (float_flag) {
-            double current = stod(arg_list.at(0)->token.value);
-            for (int i = 1 ; i < arg_list.size() ; i++) {
-                if (current > stod(arg_list.at(i)->token.value)) {
-                    node->token.value = "#f";
-                    node->token.type = NIL;
-                    return node;
-                }
-                current = stod(arg_list.at(i)->token.value);
-            }
-        }
-        else {
-            int current = stoi(arg_list.at(0)->token.value);
-            for (int i = 1 ; i < arg_list.size() ; i++) {
-                if (current > stoi(arg_list.at(i)->token.value)) {
-                    node->token.value = "#f";
-                    node->token.type = NIL;
-                    return node;
-                }
-                current = stoi(arg_list.at(i)->token.value);
-            }
-        }
-
-        return node;
-    }
-    Node_Token* bigger_equal_func(Node_Token *cur, Node_Token *args, errorType &e) {
-        Node_Token* node = new Node_Token();
-        vector<Node_Token*> arg_list;
-        bool float_flag = false;
-        node->token.value = "#t";
-        node->token.type = T;
-
-        if (count_args(args) < 2)
-            throw Error(incorrect_number_of_arguments, ">=", "incorrect_number_of_arguments", 0, 0);
-        else {
-            Node_Token *t = args;
-            while (t != nullptr && t->token.type != NIL) {
-                Node_Token *parameter = t->left;
-                // cerr << "\033[1;35m" << "parameter: " << parameter->token.value << "\033[0m" << endl;
-                arg_list.push_back(evalution(parameter, e));
-                
-                if(arg_list.back()->token.type == FLOAT)
-                    float_flag = true;
-                else if (arg_list.back()->token.type == T || arg_list.back()->token.type == NIL) {
-                    // ERROR (+ with incorrect argument type) : #t
-                    e = incorrect_argument_type;
-                    string s = arg_list.back()->token.value;
-                    if (s == "#f") s = "nil";
-                    throw Error(incorrect_argument_type, ">=", s, 0, 0);
-                }
-                t = t->right;
-            }
-        }
-        if (float_flag) {
-            double current = stod(arg_list.at(0)->token.value);
-            for (int i = 1 ; i < arg_list.size() ; i++) {
-                if (current < stod(arg_list.at(i)->token.value)) {
-                    node->token.value = "#f";
-                    node->token.type = NIL;
-                    return node;
-                }
-                current = stod(arg_list.at(i)->token.value);
-            }
-        }
-        else {
-            int current = stoi(arg_list.at(0)->token.value);
-            for (int i = 1 ; i < arg_list.size() ; i++) {
-                if (current < stoi(arg_list.at(i)->token.value)) {
-                    node->token.value = "#f";
-                    node->token.type = NIL;
-                    return node;
-                }
-                current = stoi(arg_list.at(i)->token.value);
-            }
-        }
-
-        return node;
-    }
-
     Node_Token* str_operator(string instr, Node_Token *cur, Node_Token *args, errorType &e) {
         Node_Token* node = new Node_Token();
+        pointer_gather.insert(node);
         vector<Node_Token*> arg_list;
         node->token.value = "#t";
         node->token.type = T;
@@ -829,6 +838,10 @@ class FunctionExecutor {
                         // cerr << "\033[1;32m" << "error: " << "no return value" << "\033[0m" << endl;
                         e = unbound_parameter;
                         throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, parameter);
+                    }
+                    else if (e == defined || e == error_level_define || e == error_define_format) {
+                        e = error_level_define;
+                        throw Error(error_level_define, instr, "error_level_define", 0, 0);
                     }
                     else
                         throw err;
@@ -905,8 +918,98 @@ class FunctionExecutor {
         return node;
     }
 
+    Node_Token* eqv(string instr, Node_Token *cur, Node_Token *args, errorType &e) {
+        Node_Token* node = new Node_Token();
+        pointer_gather.insert(node);
+        vector<Node_Token*> arg_list;
+        node->token.value = "#t";
+        node->token.type = T;
+
+        if (count_args(args) < 2)
+            throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
+        else {
+            Node_Token *t = args;
+            while (t != nullptr && t->token.type != NIL) {
+                Node_Token *parameter = t->left;
+                try {
+                    arg_list.push_back(evalution(parameter, e));
+                }
+                catch (Error err) {
+                    // cerr << "\033[1;35m" << "error: " << error << "\033[0m" << endl;
+                    if (e == no_return_value) {
+                        e = unbound_parameter;
+                        throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, parameter);
+                    }
+                    else if (e == defined || e == error_level_define || e == error_define_format) {
+                        e = error_level_define;
+                        throw Error(error_level_define, instr, "error_level_define", 0, 0);
+                    }
+                    else
+                        throw err;
+                }
+                t = t->right;
+            }
+        }
+
+        if (!is_equ_address(arg_list.at(0), arg_list.at(1))) {
+            node->token.value = "#f";
+            node->token.type = NIL;
+        }
+
+        return node;
+    }
+    Node_Token* equal(string instr, Node_Token *cur, Node_Token *args, errorType &e) {
+        Node_Token* node = new Node_Token();
+        pointer_gather.insert(node);
+        vector<Node_Token*> arg_list;
+        node->token.value = "#t";
+        node->token.type = T;
+
+        if (count_args(args) != 2)
+            throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
+        else {
+            Node_Token *t = args;
+            while (t != nullptr && t->token.type != NIL) {
+                Node_Token *parameter = t->left;
+                try {
+                    arg_list.push_back(evalution(parameter, e));
+                }
+                catch (Error err) {
+                    // cerr << "\033[1;35m" << "error: " << error << "\033[0m" << endl;
+                    if (e == no_return_value) {
+                        e = unbound_parameter;
+                        throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, parameter);
+                    }
+                    else if (e == defined || e == error_level_define || e == error_define_format) {
+                        e = error_level_define;
+                        throw Error(error_level_define, instr, "error_level_define", 0, 0);
+                    }
+                    else
+                        throw err;
+                }
+                t = t->right;
+            }
+        }
+        
+        if (!is_equ(arg_list.at(0), arg_list.at(1))) {
+            node->token.value = "#f";
+            node->token.type = NIL;
+        }
+
+        return node;
+    }
+    Node_Token* begin_func(string instr, Node_Token *cur, Node_Token *args, errorType &e) {
+        Node_Token* node = new Node_Token();
+        pointer_gather.insert(node);
+        vector<Node_Token*> arg_list;
+        cerr << "\033[1;35m" << "begin_func unwritten yet." << "\033[0m" << endl;
+
+        return node;
+    }
+
     Node_Token* if_func(string instr, Node_Token *cur, Node_Token *args, errorType &e) {
         Node_Token* node = new Node_Token();
+        pointer_gather.insert(node);
         vector<Node_Token*> arg_list;
         bool float_flag = false;
         node->token.value = "#t";
@@ -929,6 +1032,10 @@ class FunctionExecutor {
                         // cerr << "\033[1;32m" << "error: " << "no return value" << "\033[0m" << endl;
                         e = unbound_test_condition;
                         throw Error(unbound_test_condition, instr, "unbound_test_condition", 0, 0, parameter);
+                    }
+                    else if (e == defined || e == error_level_define || e == error_define_format) {
+                        e = error_level_define;
+                        throw Error(error_level_define, instr, "error_level_define", 0, 0);
                     }
                     else
                         throw err;
@@ -968,7 +1075,9 @@ class FunctionExecutor {
     }
     Node_Token* cond_func(string instr, Node_Token *cur, Node_Token *args, errorType &e) {
         Node_Token* node = new Node_Token();
+        pointer_gather.insert(node);
         vector<Node_Token*> arg_list;
+        cerr << "\033[1;35m" << "cond_func unwritten yet." << "\033[0m" << endl;
         
         // if (count_args(args) < 1)
         //     throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
@@ -987,6 +1096,10 @@ class FunctionExecutor {
                     if (e == no_return_value && t->right) {
                         e = no_return_value;
                         throw Error(no_return_value, instr, "no_return_value", 0, 0, cur);
+                    }
+                    else if (e == defined || e == error_level_define || e == error_define_format) {
+                        e = error_level_define;
+                        throw Error(error_level_define, instr, "error_level_define", 0, 0);
                     }
                     else
                         throw err;
@@ -1043,12 +1156,12 @@ class FunctionExecutor {
                 //     // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
                 //     // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
                 // }
-                if (vars_correspond_table.find(cur->token.value) == vars_correspond_table.end()){
+                if (defined_table.find(cur->token.value) == defined_table.end()){
                     e = unbound_symbol;
                     throw Error(unbound_symbol, cur->token.value, "unbound symbol", cur->token.line, cur->token.column);
                 }
                 else
-                    return vars_correspond_table[cur->token.value]; // Return the bound symbol
+                    return defined_table[cur->token.value]; // Return the bound symbol
                 
             }
             return cur; // Return the atom itself
@@ -1075,8 +1188,8 @@ class FunctionExecutor {
                 e = undefined_function;
                 throw Error(undefined_function, func_Token->token.value, func_Token->token.value ,func_Token->token.line, func_Token->token.column);
             }
-            // else if (func_Token->token.value == "define")
-
+            else if (func_Token->token.value == "define")
+                return define_func("define", cur, cur->right, e);
             // else if (func_Token->token.value == "cons")
 
             // else if (func_Token->token.value == "lambda")
@@ -1124,16 +1237,18 @@ class FunctionExecutor {
                 return and_func(cur, cur->right, e);
             else if (func_Token->token.value == "or")
                 return or_func(cur, cur->right, e);
+
             else if (func_Token->token.value == "=")
-                return equal_func(cur, cur->right, e);
+                return compare_func("=", cur, cur->right, e);
             else if (func_Token->token.value == "<")
-                return smaller_func(cur, cur->right, e);
+                return compare_func("<", cur, cur->right, e);
             else if (func_Token->token.value == ">")
-                return bigger_func(cur, cur->right, e);
+                return compare_func(">", cur, cur->right, e);
             else if (func_Token->token.value == "<=")
-                return smaller_equal_func(cur, cur->right, e);
+                return compare_func("<=", cur, cur->right, e);
             else if (func_Token->token.value == ">=")
-                return bigger_equal_func(cur, cur->right, e);
+                return compare_func(">=", cur, cur->right, e);
+
             else if (func_Token->token.value == "string-append")
                 return str_operator("string-append", cur, cur->right, e);
             else if (func_Token->token.value == "string>?")
@@ -1143,12 +1258,13 @@ class FunctionExecutor {
             else if (func_Token->token.value == "string=?")
                 return str_operator("string=?", cur, cur->right, e);
 
-            // else if (func_Token->token.value == "eqv?")
-            //     return eqv(cur, cur->right, e);
-            // else if (func_Token->token.value == "equal?")
-            //     return equal(cur, cur->right, e);
-            // else if (func_Token->token.value == "begin")
-            //     return begin(cur, cur->right, e);
+            else if (func_Token->token.value == "eqv?")
+                return eqv("eqv", cur, cur->right, e);
+            else if (func_Token->token.value == "equal?")
+                return equal("equal?", cur, cur->right, e);
+            else if (func_Token->token.value == "begin")
+                return begin_func("begin", cur, cur->right, e);
+
             else if (func_Token->token.value == "if")
                 return if_func("if", cur, cur->right, e);
             else if (func_Token->token.value == "cond")
@@ -1189,7 +1305,7 @@ class FunctionExecutor {
 
 // FunctionExecutor global_func_executor;
 
-vector<Node_Token*> define_trees;
+
 // in order to parse the input, build a parser tree
 class AST_Tree {
     private:
@@ -3068,6 +3184,22 @@ int main() {
                     Syntax.print(e.get_sub_error_tree());
                     Lexical.reset();
                     break;
+                case defined:
+                    cerr << "\033[1;31m" << "defined" << "\033[0m" << endl;
+                    cout << e.message << endl;
+                    Lexical.reset();
+                    break;
+                case error_level_define:
+                    cerr << "\033[1;31m" << "error_level_define" << "\033[0m" << endl;
+                    cout << e.message << endl;
+                    Lexical.reset();
+                    break;
+                case error_define_format:
+                    cerr << "\033[1;31m" << "error_define_format" << "\033[0m" << endl;
+                    cout << e.message;
+                    Syntax.print(e.get_sub_error_tree());
+                    Lexical.reset();
+                    break;
                 
                 default:
                     break;
@@ -3078,5 +3210,6 @@ int main() {
         
     cout << "Thanks for using OurScheme!";
     fflush(stdout);
+    clear_pointer_gather();
     return 0;
 }
