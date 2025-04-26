@@ -1246,61 +1246,51 @@ class FunctionExecutor {
     Node_Token* cond_func(string instr, Node_Token *cur, Node_Token *args, errorType &e) {
         Node_Token* node = new Node_Token();
         pointer_gather.insert(node);
-        vector<Node_Token*> arg_list;
-        cout << "\033[1;35m" << "cond_func unwritten yet." << "\033[0m" << endl;
-        
-        // if (count_args(args) < 1)
-        //     throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
-        if (args->left == nullptr) // count_args(args) < 1
-            throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
-        else {
-            Node_Token *t = args;
-            while (t != nullptr && t->token.type != NIL) {
-                Node_Token *parameter = t->left;
-                // cerr << "\033[1;35m" << "parameter: " << parameter->token.value << "\033[0m" << endl;
-                try {
-                    arg_list.push_back(evalution(parameter, e));
-                }
-                catch (Error err) {
-                    // cerr << "\033[1;35m" << "error: " << error << "\033[0m" << endl;
-                    if (e == no_return_value && t->right) {
-                        e = no_return_value;
-                        throw Error(no_return_value, instr, "no_return_value", 0, 0, cur);
-                    }
-                    else if (e == defined || e == error_level_define || e == error_define_format) {
-                        e = error_level_define;
-                        throw Error(error_level_define, instr, "DEFINE", 0, 0);
-                    }
-                    else if(e == cleaned) {
-                        e = error_level_cleaned;
-                        throw Error(error_level_cleaned, instr, "CLEAN-ENVIRONMENT", 0, 0);
-                    }
-                    else
-                        throw err;
-                }
-                // ! need ??????????
-                if (arg_list.back()->token.type == DOT) {
-                    e = incorrect_argument_type_list;
-                    string s = arg_list.back()->token.value;
-                    throw Error(incorrect_argument_type_list, instr, s, 0, 0, arg_list.back());
-                }
-                // ! need ??????????
 
-                t = t->right;
-            }
+        if (args == nullptr || args->token.type == NIL) {
+            throw Error(error_define_format, instr, "COND format", 0, 0, cur);
         }
 
-        for (int i = 0 ; i < arg_list.size() ; i++){
-            if (arg_list.at(i)->token.type == NIL)
-                continue;
-            else {
-                node->token.value = arg_list.at(i)->token.value;
-                node->token.type = arg_list.at(i)->token.type;
-                return node;
+        Node_Token* clause = args;
+        while (clause != nullptr && clause->token.type != NIL) {
+            Node_Token* condition = clause->left;
+
+            if (condition == nullptr || condition->token.type != DOT) {
+                throw Error(error_define_format, instr, "COND format", 0, 0, cur);
             }
+
+            Node_Token* test = condition->left;
+            Node_Token* body = condition->right;
+
+            if (test == nullptr) {
+                throw Error(error_define_format, instr, "COND format", 0, 0, cur);
+            }
+
+            Node_Token* evaluated_test = nullptr;
+            try {
+                evaluated_test = evalution(test, e);
+            } catch (Error err) {
+                throw err;
+            }
+
+            if (evaluated_test->token.type != NIL) {
+                if (body == nullptr || body->token.type == NIL) {
+                    throw Error(no_return_value, instr, "no_return_value", 0, 0, cur);
+                }
+
+                Node_Token* result = nullptr;
+                while (body != nullptr && body->token.type != NIL) {
+                    result = evalution(body->left, e);
+                    body = body->right;
+                }
+
+                return result;
+            }
+
+            clause = clause->right;
         }
 
-        return node;
+        throw Error(no_return_value, instr, "no_return_value", 0, 0, cur);
     }
     Node_Token* clean_environment(Node_Token *cur, Node_Token *args, errorType &e) {
         if (count_args(args) != 0)
