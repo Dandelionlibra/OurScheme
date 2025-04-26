@@ -1137,8 +1137,39 @@ class FunctionExecutor {
         Node_Token* node = new Node_Token();
         pointer_gather.insert(node);
         vector<Node_Token*> arg_list;
-        cout << "\033[1;35m" << "begin_func unwritten yet." << "\033[0m" << endl;
 
+        if (count_args(args) < 1)
+            throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
+        else {
+            Node_Token *t = args;
+            while (t != nullptr && t->token.type != NIL) {
+                Node_Token *parameter = t->left;
+                try {
+                    arg_list.push_back(evalution(parameter, e));
+                }
+                catch (Error err) {
+                    if (e == no_return_value) {
+                        e = unbound_parameter;
+                        throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, parameter);
+                    }
+                    else if (e == defined || e == error_level_define || e == error_define_format) {
+                        e = error_level_define;
+                        throw Error(error_level_define, instr, "DEFINE", 0, 0);
+                    }
+                    else if (e == cleaned) {
+                        e = error_level_cleaned;
+                        throw Error(error_level_cleaned, instr, "CLEAN-ENVIRONMENT", 0, 0);
+                    }
+                    else
+                        throw err;
+                }
+                t = t->right;
+            }
+        }
+
+        // Return the last evaluated argument
+        node->token.value = arg_list.back()->token.value;
+        node->token.type = arg_list.back()->token.type;
         return node;
     }
 
