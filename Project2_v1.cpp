@@ -64,6 +64,10 @@ enum errorType {
     error_level_define = 889,
     error_define_format = 890,
 
+    cleaned = 800,
+    error_level_cleaned = 801,
+
+    error_level_exit = 999,
     Error_None = 99999
 };
 
@@ -142,10 +146,13 @@ public:
             message = "ERROR (non-list) : "; // Node_Token* r
         else if (t == defined)
             message = e_token + " defined";
-        else if (t == error_level_define)
-            message = "ERROR (level of DEFINE)";
+        else if (t == error_level_define || t == error_level_cleaned || t == error_level_exit)
+            message = "ERROR (level of " + c_token + ")";
         else if (t == error_define_format)
             message = "ERROR (DEFINE format) : "; // Node_Token* r
+        else if (t == cleaned)
+            message = "environment cleaned";
+            
         
 
         
@@ -301,11 +308,15 @@ class FunctionExecutor {
                     }
                     else if (e == defined || e == error_level_define || e == error_define_format) {
                         e = error_level_define;
-                        throw Error(error_level_define, instr, "error_level_define", 0, 0);
+                        throw Error(error_level_define, instr, "DEFINE", 0, 0);
                     }
                     else if (i == 0 && e == unbound_symbol) {
                         e = Error_None;
                         continue;
+                    }
+                    else if(e == cleaned) {
+                        e = error_level_cleaned;
+                        throw Error(error_level_cleaned, instr, "CLEAN-ENVIRONMENT", 0, 0);
                     }
                     else
                         throw err;
@@ -316,13 +327,9 @@ class FunctionExecutor {
                     e = error_define_format;
                     throw Error(error_define_format, "define", "error_define_format", 0, 0, cur);
                 }
-                else if (i == 1) {
-                    if (defined_table.find(arg_list.at(0)->token.value) != defined_table.end()) {
-
-                        defined_table.erase(arg_list.at(0)->token.value);
-                    }
-                    else defined_table.insert({arg_list.at(0)->token.value, arg_list.at(1)});
-                }
+                else if (i == 1)
+                    defined_table[arg_list.at(0)->token.value] = arg_list.at(1);
+                
                 t = t->right;
             }
             
@@ -377,7 +384,11 @@ class FunctionExecutor {
                     }
                     else if (e == defined || e == error_level_define || e == error_define_format) {
                         e = error_level_define;
-                        throw Error(error_level_define, instr, "error_level_define", 0, 0);
+                        throw Error(error_level_define, instr, "DEFINE", 0, 0);
+                    }
+                    else if(e == cleaned) {
+                        e = error_level_cleaned;
+                        throw Error(error_level_cleaned, instr, "CLEAN-ENVIRONMENT", 0, 0);
                     }
                     else
                         throw err;
@@ -436,7 +447,11 @@ class FunctionExecutor {
                     }
                     else if (e == defined || e == error_level_define || e == error_define_format) {
                         e = error_level_define;
-                        throw Error(error_level_define, instr, "error_level_define", 0, 0);
+                        throw Error(error_level_define, instr, "DEFINE", 0, 0);
+                    }
+                    else if(e == cleaned) {
+                        e = error_level_cleaned;
+                        throw Error(error_level_cleaned, instr, "CLEAN-ENVIRONMENT", 0, 0);
                     }
                     else
                         throw err;
@@ -536,7 +551,11 @@ class FunctionExecutor {
                     }
                     else if (e == defined || e == error_level_define || e == error_define_format) {
                         e = error_level_define;
-                        throw Error(error_level_define, instr, "error_level_define", 0, 0);
+                        throw Error(error_level_define, instr, "DEFINE", 0, 0);
+                    }
+                    else if(e == cleaned) {
+                        e = error_level_cleaned;
+                        throw Error(error_level_cleaned, instr, "CLEAN-ENVIRONMENT", 0, 0);
                     }
                     else
                         throw err;
@@ -612,85 +631,79 @@ class FunctionExecutor {
         return node;
     }
 
-    Node_Token* not_func(Node_Token *cur, Node_Token *args, errorType &e) {
+    Node_Token* implement_logical(string instr, Node_Token *cur, Node_Token *args, errorType &e) {
         Node_Token* node = new Node_Token();
+        pointer_gather.insert(node);
         vector<Node_Token*> arg_list;
-        node->token.type = NIL;
-        node->token.value = "#f";
+        node->token.value = "#t";
+        node->token.type = T;
 
-        if (count_args(args) != 1)
-            throw Error(incorrect_number_of_arguments, "not", "incorrect_number_of_arguments", 0, 0);
-        else {
-            Node_Token *t = args;
-            Node_Token *parameter = t->left;
-            if (parameter->token.type == NIL) {
-                node->token.type = T;
-                node->token.value = "#t";
-            }
-        }
-        return node;
-    }
-    Node_Token* and_func(Node_Token *cur, Node_Token *args, errorType &e) {
-        /*
-        第一個被計算為 nil 則回傳 nil
-        如果不是 nil 則回傳最後一個計算出的值
-        */
-        Node_Token* node = new Node_Token();
-        vector<Node_Token*> arg_list;
-        node->token.type = NIL;
-        node->token.value = "#f";
-
-        if (count_args(args) < 2)
-            throw Error(incorrect_number_of_arguments, "and", "incorrect_number_of_arguments", 0, 0);
+        if (instr == "not" && count_args(args) != 1)
+            throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
+        else if ((instr == "and" || instr == "or") && count_args(args) < 2)
+            throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
         else {
             Node_Token *t = args;
             while (t != nullptr && t->token.type != NIL) {
                 Node_Token *parameter = t->left;
-                // cerr << "\033[1;35m" << "parameter: " << parameter->token.value << "\033[0m" << endl;
-                arg_list.push_back(evalution(parameter, e));
+                try {
+                    arg_list.push_back(evalution(parameter, e));
+                }
+                catch (Error err) {
+                    if (e == no_return_value) {
+                        e = unbound_parameter;
+                        throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, parameter);
+                    }
+                    else if (e == defined || e == error_level_define || e == error_define_format) {
+                        e = error_level_define;
+                        throw Error(error_level_define, instr, "DEFINE", 0, 0);
+                    }
+                    else if(e == cleaned) {
+                        e = error_level_cleaned;
+                        throw Error(error_level_cleaned, instr, "CLEAN-ENVIRONMENT", 0, 0);
+                    }
+                    else
+                        throw err;
+                }
+
                 t = t->right;
             }
         }
 
-        for (int i = 0 ; i < arg_list.size() ; i++){
-            node->token.is_function = arg_list.at(i)->token.is_function;
-            node->token.value = arg_list.at(i)->token.value;
-            node->token.type = arg_list.at(i)->token.type;
-            if (arg_list.at(i)->token.type == NIL)
-                return node;
-        }
-        return node;
-    }
-    Node_Token* or_func(Node_Token *cur, Node_Token *args, errorType &e) {
-        /* 
-        第一個被計算為非 nil 則直接回傳
-        如果前面都是 nil 則回傳最後一個的值
-        */
-        Node_Token* node = new Node_Token();
-        vector<Node_Token*> arg_list;
-        node->token.type = NIL;
-        node->token.value = "#f";
-
-        if (count_args(args) != 2)
-            throw Error(incorrect_number_of_arguments, "or", "incorrect_number_of_arguments", 0, 0);
-        else {
-            Node_Token *t = args;
-            while (t != nullptr && t->token.type != NIL) {
-                Node_Token *parameter = t->left;
-                // cerr << "\033[1;35m" << "parameter: " << parameter->token.value << "\033[0m" << endl;
-                arg_list.push_back(evalution(parameter, e));
-                t = t->right;
+        if (instr == "not") {
+            if (arg_list.at(0)->token.type != NIL) {
+                node->token.value = "#f";
+                node->token.type = NIL;
             }
         }
-
-        for (int i = 0 ; i < arg_list.size() ; i++){
-            if (arg_list.at(i)->token.type != NIL) {
+        else if (instr == "and") {
+            /*
+            第一個被計算為 nil 則回傳 nil
+            如果不是 nil 則回傳最後一個計算出的值
+            */
+            for (int i = 0 ; i < arg_list.size() ; i++){
                 node->token.is_function = arg_list.at(i)->token.is_function;
                 node->token.value = arg_list.at(i)->token.value;
                 node->token.type = arg_list.at(i)->token.type;
-                return node;
+                if (arg_list.at(i)->token.type == NIL)
+                    return node;
             }
         }
+        else if (instr == "or") {
+            /* 
+            第一個被計算為非 nil 則直接回傳
+            如果前面都是 nil 則回傳最後一個的值
+            */
+            for (int i = 0 ; i < arg_list.size() ; i++){
+                node->token.is_function = arg_list.at(i)->token.is_function;
+                node->token.value = arg_list.at(i)->token.value;
+                node->token.type = arg_list.at(i)->token.type;
+                if (arg_list.at(i)->token.type != NIL)
+                    return node;
+            }
+        }
+
+
         return node;
     }
 
@@ -709,8 +722,27 @@ class FunctionExecutor {
             while (t != nullptr && t->token.type != NIL) {
                 Node_Token *parameter = t->left;
                 // cerr << "\033[1;35m" << "parameter: " << parameter->token.value << "\033[0m" << endl;
-                arg_list.push_back(evalution(parameter, e));
-                
+                try {
+                    arg_list.push_back(evalution(parameter, e));
+                }
+                catch (Error err) {
+                    // cerr << "\033[1;35m" << "error: " << error << "\033[0m" << endl;
+                    if (e == no_return_value) {
+                        e = unbound_parameter;
+                        throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, parameter);
+                    }
+                    else if (e == defined || e == error_level_define || e == error_define_format) {
+                        e = error_level_define;
+                        throw Error(error_level_define, instr, "DEFINE", 0, 0);
+                    }
+                    else if(e == cleaned) {
+                        e = error_level_cleaned;
+                        throw Error(error_level_cleaned, instr, "CLEAN-ENVIRONMENT", 0, 0);
+                    }
+                    else
+                        throw err;
+                }
+
                 if(arg_list.back()->token.type == FLOAT)
                     float_flag = true;
                 else if (arg_list.back()->token.type == T || arg_list.back()->token.type == NIL) {
@@ -833,15 +865,17 @@ class FunctionExecutor {
                     }
                 }
                 catch (Error err) {
-                    // cerr << "\033[1;35m" << "error: " << err.type << "\033[0m" << endl;
                     if (err.type == no_return_value) {
-                        // cerr << "\033[1;32m" << "error: " << "no return value" << "\033[0m" << endl;
                         e = unbound_parameter;
                         throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, parameter);
                     }
                     else if (e == defined || e == error_level_define || e == error_define_format) {
                         e = error_level_define;
-                        throw Error(error_level_define, instr, "error_level_define", 0, 0);
+                        throw Error(error_level_define, instr, "DEFINE", 0, 0);
+                    }
+                    else if(e == cleaned) {
+                        e = error_level_cleaned;
+                        throw Error(error_level_cleaned, instr, "CLEAN-ENVIRONMENT", 0, 0);
                     }
                     else
                         throw err;
@@ -942,7 +976,11 @@ class FunctionExecutor {
                     }
                     else if (e == defined || e == error_level_define || e == error_define_format) {
                         e = error_level_define;
-                        throw Error(error_level_define, instr, "error_level_define", 0, 0);
+                        throw Error(error_level_define, instr, "DEFINE", 0, 0);
+                    }
+                    else if(e == cleaned) {
+                        e = error_level_cleaned;
+                        throw Error(error_level_cleaned, instr, "CLEAN-ENVIRONMENT", 0, 0);
                     }
                     else
                         throw err;
@@ -982,7 +1020,11 @@ class FunctionExecutor {
                     }
                     else if (e == defined || e == error_level_define || e == error_define_format) {
                         e = error_level_define;
-                        throw Error(error_level_define, instr, "error_level_define", 0, 0);
+                        throw Error(error_level_define, instr, "DEFINE", 0, 0);
+                    }
+                    else if(e == cleaned) {
+                        e = error_level_cleaned;
+                        throw Error(error_level_cleaned, instr, "CLEAN-ENVIRONMENT", 0, 0);
                     }
                     else
                         throw err;
@@ -1035,7 +1077,11 @@ class FunctionExecutor {
                     }
                     else if (e == defined || e == error_level_define || e == error_define_format) {
                         e = error_level_define;
-                        throw Error(error_level_define, instr, "error_level_define", 0, 0);
+                        throw Error(error_level_define, instr, "DEFINE", 0, 0);
+                    }
+                    else if(e == cleaned) {
+                        e = error_level_cleaned;
+                        throw Error(error_level_cleaned, instr, "CLEAN-ENVIRONMENT", 0, 0);
                     }
                     else
                         throw err;
@@ -1099,7 +1145,11 @@ class FunctionExecutor {
                     }
                     else if (e == defined || e == error_level_define || e == error_define_format) {
                         e = error_level_define;
-                        throw Error(error_level_define, instr, "error_level_define", 0, 0);
+                        throw Error(error_level_define, instr, "DEFINE", 0, 0);
+                    }
+                    else if(e == cleaned) {
+                        e = error_level_cleaned;
+                        throw Error(error_level_cleaned, instr, "CLEAN-ENVIRONMENT", 0, 0);
                     }
                     else
                         throw err;
@@ -1133,6 +1183,8 @@ class FunctionExecutor {
             throw Error(incorrect_number_of_arguments, "clean-environment", "incorrect_number_of_arguments", 0, 0);
         else {
             func.clear();
+            e = cleaned;
+            throw Error(cleaned, "environment cleaned", "lalala", 0, 0);
         }
         return nullptr;
     }
@@ -1232,11 +1284,11 @@ class FunctionExecutor {
                 return implement_arithmetic("/", cur, cur->right, e);
 
             else if (func_Token->token.value == "not")
-                return not_func(cur, cur->right, e);
+                return implement_logical("not", cur, cur->right, e);
             else if (func_Token->token.value == "and")
-                return and_func(cur, cur->right, e);
+                return implement_logical("and", cur, cur->right, e);
             else if (func_Token->token.value == "or")
-                return or_func(cur, cur->right, e);
+                return implement_logical("or", cur, cur->right, e);
 
             else if (func_Token->token.value == "=")
                 return compare_func("=", cur, cur->right, e);
