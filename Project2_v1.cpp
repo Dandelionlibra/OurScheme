@@ -144,7 +144,7 @@ public:
         else if (t == error_level_define || t == error_level_cleaned || t == error_level_exit)
             message = "ERROR (level of " + c_token + ")";
         else if (t == error_define_format)
-            message = "ERROR (DEFINE format) : "; // Node_Token* r
+            message = "ERROR (" + e_token + " format) : "; // Node_Token* r
         else if (t == cleaned)
             message = "environment cleaned";
             
@@ -173,7 +173,8 @@ set<string> bulid_in_func = { // only bulid-in function
     "=", "<", ">", "<=", ">=",
     "string-append", "string>?", "string<?", "string=?",
     "begin", "if", "cond",
-    "clean-environment"
+    "clean-environment",
+    "quote"
 };
 set <string> func; // all function name, unclude self-defined function
 unordered_map<string, Node_Token*> defined_table; // store the variable name and value
@@ -207,6 +208,13 @@ class FunctionExecutor {
         if (type == SYMBOL || type == INT || type == FLOAT || type == STRING || type == NIL || type == T) // || type == Left_PAREN || type == Right_PAREN
             return true;
         // QUOTE、DOT
+        return false;
+    }
+    
+    bool is_reserved_word(string str) {
+        if (func.find(str) != func.end())
+            return true;
+        
         return false;
     }
     Node_Token* eval_left(Node_Token *cur, Node_Token *args, errorType &e) {
@@ -270,7 +278,7 @@ class FunctionExecutor {
         vector<Node_Token*> arg_list;
         if (count_args(args) != 2) {
             e = error_define_format;
-            throw Error(error_define_format, "define", "error_define_format", 0, 0, cur);
+            throw Error(error_define_format, "DEFINE", "error_define_format", 0, 0, cur);
         }
         else {
             Node_Token *t = args;
@@ -281,13 +289,17 @@ class FunctionExecutor {
                 if (i == 0) {
                     if (parameter->token.type != SYMBOL && parameter->token.type != DOT) {
                         e = error_define_format;
-                        throw Error(error_define_format, "define", "error_define_format", 0, 0, cur);
+                        throw Error(error_define_format, "DEFINE", "error_define_format", 0, 0, cur);
                     }
                     else if (parameter->token.type == DOT) {
                         // proj 3
                     }
                     else if (parameter->token.type == SYMBOL) {
                         // none reserved word
+                        if (is_reserved_word(parameter->token.value)) {
+                            e = error_define_format;
+                            throw Error(error_define_format, "DEFINE", "error_define_format", 0, 0, cur);
+                        }
                         arg_list.push_back(parameter);
                     }
                 }
@@ -309,18 +321,18 @@ class FunctionExecutor {
                             e = error_level_cleaned;
                             throw Error(error_level_cleaned, instr, "CLEAN-ENVIRONMENT", 0, 0);
                         }
-                        
                         else
                             throw err;
                     }
                 }
 
-
+                // !need?
                 if (i == 0 && arg_list.at(0)->token.type != SYMBOL) {
                     cerr << "\033[1;35m" << "arg_list.at(0)->token.type: " << arg_list.at(0)->token.type << "\033[0m" << endl;
                     e = error_define_format;
-                    throw Error(error_define_format, "define", "error_define_format", 0, 0, cur);
+                    throw Error(error_define_format, "DEFINE", "error_define_format", 0, 0, cur);
                 }
+                // !need?
                 else if (i == 1) {
                     defined_table[arg_list.at(0)->token.value] = arg_list.at(1);
                     e = defined;
@@ -336,18 +348,49 @@ class FunctionExecutor {
         return nullptr;
     }
 
-    Node_Token* cons(Node_Token *cur, Node_Token *args, errorType &e) {
+    Node_Token* cons(string instr, Node_Token *cur, Node_Token *args, errorType &e) {
         Node_Token* node = new Node_Token();
         pointer_gather.insert(node);
         vector<Node_Token*> arg_list;
-        cout << "\033[1;35m" << "cons unwritten yet." << "\033[0m" << endl;
 
         if (count_args(args) != 2)
-            throw Error(incorrect_number_of_arguments, "cons", "incorrect_number_of_arguments", 0, 0);
+            throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
         else {
-            // implement cons function
+            Node_Token *t = args;
+            while (t != nullptr && t->token.type != NIL) {
+                Node_Token *parameter = t->left;
+                // cerr << "\033[1;35m" << "parameter: " << parameter->token.value << "\033[0m" << endl;
+                try {
+                    arg_list.push_back(evalution(parameter, e));
+                }
+                catch (Error err) {
+                    // cerr << "\033[1;35m" << "error: " << error << "\033[0m" << endl;
+                    if (e == no_return_value) {
+                        e = unbound_parameter;
+                        throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, parameter);
+                    }
+                    else if (e == defined || e == error_level_define || e == error_define_format) {
+                        e = error_level_define;
+                        throw Error(error_level_define, instr, "DEFINE", 0, 0);
+                    }
+                    else if(e == cleaned) {
+                        e = error_level_cleaned;
+                        throw Error(error_level_cleaned, instr, "CLEAN-ENVIRONMENT", 0, 0);
+                    }
+                    else
+                        throw err;
+                }
+
+                t = t->right;
+            }
+            // Create a new node for the cons cell
+            node->token.type = DOT;
+            node->token.value = ".";
+            node->left = arg_list.at(0);
+            node->right = arg_list.at(1);
         }
-        return nullptr;
+
+        return node;
     }
     Node_Token* lambda(Node_Token *cur, Node_Token *args, errorType &e) {
         Node_Token* node = new Node_Token();
@@ -396,30 +439,86 @@ class FunctionExecutor {
         return args;
     }
     Node_Token* car(string instr, Node_Token *cur, Node_Token *args, errorType &e) {
-        Node_Token* node = new Node_Token();
-        pointer_gather.insert(node);
-        vector<Node_Token*> arg_list;
-        cout << "\033[1;35m" << "car unwritten yet." << "\033[0m" << endl;
-        
+        // Node_Token* node = new Node_Token();
+        // pointer_gather.insert(node);
+        // vector<Node_Token*> arg_list;
+
         if (count_args(args) != 1)
             throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
         else {
-            // implement car function
+            Node_Token *parameter = args->left;
+            Node_Token *evaluated = nullptr;
+
+            try {
+                parameter = evalution(parameter, e);
+            }
+            catch (Error err) {
+                if (e == no_return_value) {
+                    e = unbound_parameter;
+                    throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, parameter);
+                }
+                else if (e == defined || e == error_level_define || e == error_define_format) {
+                    e = error_level_define;
+                    throw Error(error_level_define, instr, "DEFINE", 0, 0);
+                }
+                else if(e == cleaned) {
+                    e = error_level_cleaned;
+                    throw Error(error_level_cleaned, instr, "CLEAN-ENVIRONMENT", 0, 0);
+                }
+                else
+                    throw err;
+            }
+
+           if (parameter->token.type != DOT) {
+                e = incorrect_argument_type;
+                string s = parameter->token.value;
+                if (s == "#f") s = "nil";
+                throw Error(incorrect_argument_type, instr, s, 0, 0);
+            }
+            else {
+                return parameter->left;
+            }
         }
-        return nullptr;
+
+        // return nullptr;
     }
     Node_Token* cdr(string instr, Node_Token *cur, Node_Token *args, errorType &e) {
-        Node_Token* node = new Node_Token();
-        pointer_gather.insert(node);
-        vector<Node_Token*> arg_list;
-        cout << "\033[1;35m" << "cdr unwritten yet." << "\033[0m" << endl;
-        
         if (count_args(args) != 1)
             throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
         else {
-            // implement cdr function
+            Node_Token *parameter = args->left;
+            Node_Token *evaluated = nullptr;
+
+            try {
+                parameter = evalution(parameter, e);
+            }
+            catch (Error err) {
+                if (e == no_return_value) {
+                    e = unbound_parameter;
+                    throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, parameter);
+                }
+                else if (e == defined || e == error_level_define || e == error_define_format) {
+                    e = error_level_define;
+                    throw Error(error_level_define, instr, "DEFINE", 0, 0);
+                }
+                else if (e == cleaned) {
+                    e = error_level_cleaned;
+                    throw Error(error_level_cleaned, instr, "CLEAN-ENVIRONMENT", 0, 0);
+                }
+                else
+                    throw err;
+            }
+
+            if (parameter->token.type != DOT) {
+                e = incorrect_argument_type;
+                string s = parameter->token.value;
+                if (s == "#f") s = "nil";
+                throw Error(incorrect_argument_type, instr, s, 0, 0);
+            }
+            else {
+                return parameter->right;
+            }
         }
-        return nullptr;
     }
     
     Node_Token* judge_elements(string instr, Node_Token *cur, Node_Token *args, errorType &e) {
@@ -559,9 +658,6 @@ class FunctionExecutor {
                         throw err;
                 }
 
-                
-                // incorrect_argument_type_list
-
                 if (arg_list.back()->token.type == FLOAT)
                     float_flag = true;
                 else if (arg_list.back()->token.type == T || arg_list.back()->token.type == NIL) {
@@ -580,7 +676,6 @@ class FunctionExecutor {
                 t = t->right;
             }
         }
-
 
         if (float_flag) {
             double sum = 0.0;
@@ -1242,7 +1337,7 @@ class FunctionExecutor {
             else if (func_Token->token.value == "define")
                 return define_func("define", cur, cur->right, e);
             else if (func_Token->token.value == "cons")
-                return cons(cur, cur->right, e);
+                return cons("cons", cur, cur->right, e);
 
             // else if (func_Token->token.value == "lambda")
             
