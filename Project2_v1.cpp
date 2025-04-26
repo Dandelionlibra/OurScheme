@@ -1305,6 +1305,14 @@ class FunctionExecutor {
         return nullptr;
     }
 
+    Node_Token* quote_func(Node_Token *cur, Node_Token *args, errorType &e) {
+        if (count_args(args) != 1)
+            throw Error(incorrect_number_of_arguments, "quote", "incorrect_number_of_arguments", 0, 0);
+        else {
+            return args->left; // Directly return the quoted expression as is
+        }
+    }
+
     Node_Token* evalution(Node_Token *cur, errorType &e) {
         cerr << "-------- enter evalution --------" <<endl;
         if (cur == nullptr) return nullptr;
@@ -1440,6 +1448,9 @@ class FunctionExecutor {
 
             else if (func_Token->token.value == "clean-environment")
                 return clean_environment(cur, cur->right, e);
+            else if (func_Token->token.value == "quote")
+                return quote_func(cur, cur->right, e);
+            
             else { // undefined function
                 // cerr << "\033[1;33m" << "func_Token: " << func_Token->token.value << "\033[0m" << endl;
                 func_name = func_Token->token.value;
