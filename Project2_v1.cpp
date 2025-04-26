@@ -7,11 +7,6 @@
 #include <set>
 using namespace std;
 
-const int No_Limit = -1;
-const int Bigger_ThanTwo = 999;
-const int Bigger_ThanOne = 99;
-const int Two_Or_Three = 23;
-
 enum TokenType {
     INT = 1, // accept +&-, e.g., '123', '+123', '-123'
     FLOAT = 2, // '123.567', '123.', '.567', '+123.4', '-.123'
@@ -182,12 +177,9 @@ set<string> bulid_in_func = { // only bulid-in function
 };
 set <string> func; // all function name, unclude self-defined function
 unordered_map<string, Node_Token*> defined_table; // store the variable name and value
-vector<Node_Token*> define_trees;
 set <Node_Token*> pointer_gather; // store the variable name and value
-// void test(string str_index, string str, TokenType type) {
-//     variable var = {str, type};
-//     vars_correspond_table.insert({str_index, var});
-// }
+
+
 void clear_pointer_gather() {
     for (auto it = pointer_gather.begin(); it != pointer_gather.end(); ) {
         delete *it;
@@ -1622,7 +1614,7 @@ class AST_Tree {
         if (!tokens.empty())
             root = insert(root, tokens, index);
         
-        define_trees.push_back(root);
+        // define_trees.push_back(root);
         // cerr << "\033[1;34mend build_AST\033[0m" << endl;
         //print();
     }
