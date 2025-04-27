@@ -63,6 +63,7 @@ enum errorType {
     error_level_cleaned = 801,
 
     error_level_exit = 999,
+    // procedure = 1000,
     Error_None = 99999
 };
 
@@ -86,6 +87,24 @@ struct Node_Token {
     Node_Token() : parent(nullptr), left(nullptr), right(nullptr) {}
 };
 
+set<string> bulid_in_func = { // only bulid-in function
+    "define", "cons", "lambda", "list",
+    "car", "cdr",
+    "atom?", "pair?", "list?", "null?", "integer?", "real?", "number?", "string?", "boolean", "symbol?",
+    "+", "-", "*", "/",
+    "not", "and", "or",
+    "eqv?", "equal?",
+    "=", "<", ">", "<=", ">=",
+    "string-append", "string>?", "string<?", "string=?",
+    "begin", "if", "cond",
+    "clean-environment",
+    "quote", "exit"
+};
+set <string> func; // all function name, unclude self-defined function
+unordered_map<string, Node_Token*> defined_table; // store the variable name and value
+set <Node_Token*> pointer_gather; // store the variable name and value
+
+
 // error message 
 class Error {
 
@@ -101,8 +120,8 @@ public:
     Error() : type(Error_None), message(""), line(0), column(0), expected(""), current("") {}
     Error(errorType t, string e_token, string c_token, int l, int c, Node_Token* r = nullptr) {
         type = t;
-        // expected = e_token;
-        // current = c_token;
+        expected = e_token;
+        current = c_token;
         line = l;
         column = c;
         root = r;
@@ -127,8 +146,10 @@ public:
             message = "ERROR (" + e_token + " with incorrect argument type) : "; // Node_Token* r
         else if (t == undefined_function)
             message = "ERROR (attempt to apply non-function) : " + e_token;
-        else if (t == unbound_symbol)
-            message = "ERROR (unbound symbol) : " + e_token;
+        else if (t == unbound_symbol) {
+            if (func.find(e_token) != func.end()) message = "#<procedure " + e_token + ">";
+            else message = "ERROR (unbound symbol) : " + e_token;
+        }
         else if (t == unbound_parameter)
             message = "ERROR (unbound parameter) : "; // Node_Token* r
         else if (t == no_return_value)
@@ -147,9 +168,7 @@ public:
             message = "ERROR (" + e_token + " format) : "; // Node_Token* r
         else if (t == cleaned)
             message = "environment cleaned";
-            
         
-
         
     }
     Node_Token * get_sub_error_tree() {
@@ -163,22 +182,6 @@ struct variable {
     TokenType type;
 };
 
-set<string> bulid_in_func = { // only bulid-in function
-    "define", "cons", "lambda", "list",
-    "car", "cdr",
-    "atom?", "pair?", "list?", "null?", "integer?", "real?", "number?", "string?", "boolean", "symbol?",
-    "+", "-", "*", "/",
-    "not", "and", "or",
-    "eqv?", "equal?",
-    "=", "<", ">", "<=", ">=",
-    "string-append", "string>?", "string<?", "string=?",
-    "begin", "if", "cond",
-    "clean-environment",
-    "quote"
-};
-set <string> func; // all function name, unclude self-defined function
-unordered_map<string, Node_Token*> defined_table; // store the variable name and value
-set <Node_Token*> pointer_gather; // store the variable name and value
 
 
 void clear_pointer_gather() {
@@ -196,7 +199,7 @@ class FunctionExecutor {
     int count_args(Node_Token *args) {
         int count = 0;
         while (args->left != nullptr) {
-            // cerr << "\033[1;35m" << "args->left: " << args->left->token.value << "\033[0m" << endl;
+            cerr << "\033[1;35m" << "args->left: " << args->left->token.value << "\033[0m" << endl;
             args = args->right;
             count++;
         }
@@ -242,10 +245,8 @@ class FunctionExecutor {
             return false;
         else if (arg1 != nullptr && arg2 == nullptr)
             return false;
-        else if (arg1->token.type == INT || arg1->token.type == FLOAT || arg1->token.type == STRING) {
+        else if (arg1->token.type == INT || arg1->token.type == FLOAT || arg1->token.type == NIL || arg1->token.type == T) {
             if (arg1->token.type == arg2->token.type && arg1->token.value == arg2->token.value)
-                // cerr << "\033[1;35m" << "arg1->token.value: " << arg1->token.value << "\033[0m" << endl;
-                // cerr << "\033[1;35m" << "arg2->token.value: " << arg2->token.value << "\033[0m" << endl;
                 return is_equ_address(arg1->left, arg2->left) && is_equ_address(arg1->right, arg2->right);
             else
                 return false;
@@ -313,6 +314,21 @@ class FunctionExecutor {
                             e = unbound_parameter;
                             throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, parameter);
                         }
+                        else if (e == unbound_symbol) {
+                            if (func.find(err.expected) != func.end()) {
+                                Node_Token* node = new Node_Token();
+                                pointer_gather.insert(node);
+
+                                node->token.type = SYMBOL;
+                                node->token.value = err.expected;
+                                node->token.is_function = true;
+                                
+                                arg_list.push_back(node);
+                                
+                            }
+                            else
+                                throw err;
+                        }
                         else if (e == defined || e == error_level_define || e == error_define_format) {
                             e = error_level_define;
                             throw Error(error_level_define, instr, "DEFINE", 0, 0);
@@ -320,6 +336,10 @@ class FunctionExecutor {
                         else if(e == cleaned) {
                             e = error_level_cleaned;
                             throw Error(error_level_cleaned, instr, "CLEAN-ENVIRONMENT", 0, 0);
+                        }
+                        else if(e == UNEXPECTED_EXIT) {
+                            e = error_level_exit;
+                            throw Error(error_level_exit, instr, "EXIT", 0, 0);
                         }
                         else
                             throw err;
@@ -409,16 +429,23 @@ class FunctionExecutor {
     Node_Token* list_func(string instr, Node_Token *cur, Node_Token *args, errorType &e) {
         Node_Token* node = new Node_Token();
         pointer_gather.insert(node);
+        node->token.type = DOT;
+        node->token.value = ".";
+
         if (count_args(args) < 1)
             throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
         else {
-            if (args != nullptr && args->token.type != NIL) {
-                Node_Token *parameter = args->left;
+            Node_Token* current = node;
+            Node_Token* head = node;
+
+            while (args != nullptr && args->token.type != NIL) {
+                Node_Token* parameter = args->left;
+                Node_Token* evaluated = nullptr;
+
                 try {
-                    parameter = evalution(args->left, e);
+                    evaluated = evalution(parameter, e);
                 }
                 catch (Error err) {
-                    // cerr << "\033[1;35m" << "error: " << error << "\033[0m" << endl;
                     if (e == no_return_value) {
                         e = unbound_parameter;
                         throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, parameter);
@@ -427,16 +454,39 @@ class FunctionExecutor {
                         e = error_level_define;
                         throw Error(error_level_define, instr, "DEFINE", 0, 0);
                     }
-                    else if(e == cleaned) {
+                    else if (e == cleaned) {
                         e = error_level_cleaned;
                         throw Error(error_level_cleaned, instr, "CLEAN-ENVIRONMENT", 0, 0);
+                    }
+                    else if(e == UNEXPECTED_EXIT) {
+                        e = error_level_exit;
+                        throw Error(error_level_exit, instr, "EXIT", 0, 0);
                     }
                     else
                         throw err;
                 }
+
+                current->left = evaluated;
+                if (args->right != nullptr && args->right->token.type != NIL) {
+                    Node_Token* next = new Node_Token();
+                    pointer_gather.insert(next);
+                    next->token.type = DOT;
+                    next->token.value = ".";
+                    current->right = next;
+                    current = next;
+                }
+                else {
+                    current->right = new Node_Token();
+                    pointer_gather.insert(current->right);
+                    current->right->token.type = NIL;
+                    current->right->token.value = "#f";
+                }
+
+                args = args->right;
             }
+
+            return head;
         }
-        return args;
     }
     Node_Token* car(string instr, Node_Token *cur, Node_Token *args, errorType &e) {
         // Node_Token* node = new Node_Token();
@@ -465,11 +515,18 @@ class FunctionExecutor {
                     e = error_level_cleaned;
                     throw Error(error_level_cleaned, instr, "CLEAN-ENVIRONMENT", 0, 0);
                 }
+                else if(e == UNEXPECTED_EXIT) {
+                    e = error_level_exit;
+                    throw Error(error_level_exit, instr, "EXIT", 0, 0);
+                }
                 else
                     throw err;
             }
 
-           if (parameter->token.type != DOT) {
+            if (parameter->token.type != DOT) {
+                if (func.find(parameter->token.value) != func.end()) {
+                    return parameter;
+                }
                 e = incorrect_argument_type;
                 string s = parameter->token.value;
                 if (s == "#f") s = "nil";
@@ -504,6 +561,10 @@ class FunctionExecutor {
                 else if (e == cleaned) {
                     e = error_level_cleaned;
                     throw Error(error_level_cleaned, instr, "CLEAN-ENVIRONMENT", 0, 0);
+                }
+                else if(e == UNEXPECTED_EXIT) {
+                    e = error_level_exit;
+                    throw Error(error_level_exit, instr, "EXIT", 0, 0);
                 }
                 else
                     throw err;
@@ -549,6 +610,10 @@ class FunctionExecutor {
                     else if(e == cleaned) {
                         e = error_level_cleaned;
                         throw Error(error_level_cleaned, instr, "CLEAN-ENVIRONMENT", 0, 0);
+                    }
+                    else if(e == UNEXPECTED_EXIT) {
+                        e = error_level_exit;
+                        throw Error(error_level_exit, instr, "EXIT", 0, 0);
                     }
                     else
                         throw err;
@@ -654,6 +719,10 @@ class FunctionExecutor {
                         e = error_level_cleaned;
                         throw Error(error_level_cleaned, instr, "CLEAN-ENVIRONMENT", 0, 0);
                     }
+                    else if(e == UNEXPECTED_EXIT) {
+                        e = error_level_exit;
+                        throw Error(error_level_exit, instr, "EXIT", 0, 0);
+                    }
                     else
                         throw err;
                 }
@@ -678,7 +747,7 @@ class FunctionExecutor {
         }
 
         if (float_flag) {
-            double sum = 0.0;
+            double sum = stod(arg_list.at(0)->token.value);
             for (int i = 1 ; i < arg_list.size() ; i++) {
                 if (instr == "+")
                     sum += stod(arg_list.at(i)->token.value);
@@ -754,6 +823,10 @@ class FunctionExecutor {
                     else if(e == cleaned) {
                         e = error_level_cleaned;
                         throw Error(error_level_cleaned, instr, "CLEAN-ENVIRONMENT", 0, 0);
+                    }
+                    else if(e == UNEXPECTED_EXIT) {
+                        e = error_level_exit;
+                        throw Error(error_level_exit, instr, "EXIT", 0, 0);
                     }
                     else
                         throw err;
@@ -831,6 +904,10 @@ class FunctionExecutor {
                     else if(e == cleaned) {
                         e = error_level_cleaned;
                         throw Error(error_level_cleaned, instr, "CLEAN-ENVIRONMENT", 0, 0);
+                    }
+                    else if(e == UNEXPECTED_EXIT) {
+                        e = error_level_exit;
+                        throw Error(error_level_exit, instr, "EXIT", 0, 0);
                     }
                     else
                         throw err;
@@ -970,6 +1047,10 @@ class FunctionExecutor {
                         e = error_level_cleaned;
                         throw Error(error_level_cleaned, instr, "CLEAN-ENVIRONMENT", 0, 0);
                     }
+                    else if(e == UNEXPECTED_EXIT) {
+                        e = error_level_exit;
+                        throw Error(error_level_exit, instr, "EXIT", 0, 0);
+                    }
                     else
                         throw err;
                 }
@@ -984,24 +1065,26 @@ class FunctionExecutor {
                     node->token.type = STRING;
                 }
                 else node->token.value += arg_list.at(i)->token.value.substr(1, arg_list.at(i)->token.value.size() - 2);
+
+                if (i == arg_list.size()-1)
+                    node->token.value = "\"" + node->token.value + "\"";
                 
             }
             else if (instr == "string>?") {
                 if (i == 0) continue;
                 else {
-                    int same = 0;
                     for (int j = 0 ; j < arg_list.at(i-1)->token.value.size() && j < arg_list.at(i)->token.value.size() ; j++) {
                         if (arg_list.at(i-1)->token.value[j] < arg_list.at(i)->token.value[j]) {
                             node->token.value = "#f";
                             node->token.type = NIL;
                             return node;
                         }
-                        else if (arg_list.at(i-1)->token.value[j] == arg_list.at(i)->token.value[j])
-                            same++;
+                        else if (arg_list.at(i-1)->token.value[j] > arg_list.at(i)->token.value[j])
+                            break;
                         
                     }
-                    if (same == arg_list.at(i-1)->token.value.size() && same == arg_list.at(i)->token.value.size() || 
-                        (same == arg_list.at(i-1)->token.value.size() && arg_list.at(i-1)->token.value.size() < arg_list.at(i)->token.value.size())) {
+                    if (arg_list.at(i-1)->token.value.size() <= arg_list.at(i)->token.value.size() &&
+                        arg_list.at(i-1)->token.value == arg_list.at(i)->token.value.substr(0, arg_list.at(i-1)->token.value.size())) {
                         node->token.value = "#f";
                         node->token.type = NIL;
                         return node;
@@ -1012,19 +1095,18 @@ class FunctionExecutor {
             else if (instr == "string<?") {
                 if (i == 0) continue;
                 else {
-                    int same = 0;
                     for (int j = 0 ; j < arg_list.at(i-1)->token.value.size() && j < arg_list.at(i)->token.value.size() ; j++) {
                         if (arg_list.at(i-1)->token.value[j] > arg_list.at(i)->token.value[j]) {
                             node->token.value = "#f";
                             node->token.type = NIL;
                             return node;
                         }
-                        else if (arg_list.at(i-1)->token.value[j] == arg_list.at(i)->token.value[j])
-                            same++;
+                        else if (arg_list.at(i-1)->token.value[j] < arg_list.at(i)->token.value[j])
+                            break;
                         
                     }
-                    if (same == arg_list.at(i-1)->token.value.size() && same == arg_list.at(i)->token.value.size() || 
-                        same == arg_list.at(i-1)->token.value.size() && arg_list.at(i-1)->token.value.size() > arg_list.at(i)->token.value.size()) {
+                    if (arg_list.at(i-1)->token.value.size() >= arg_list.at(i)->token.value.size() &&
+                        arg_list.at(i-1)->token.value == arg_list.at(i)->token.value.substr(0, arg_list.at(i-1)->token.value.size())) {
                         node->token.value = "#f";
                         node->token.type = NIL;
                         return node;
@@ -1075,6 +1157,10 @@ class FunctionExecutor {
                         e = error_level_cleaned;
                         throw Error(error_level_cleaned, instr, "CLEAN-ENVIRONMENT", 0, 0);
                     }
+                    else if(e == UNEXPECTED_EXIT) {
+                        e = error_level_exit;
+                        throw Error(error_level_exit, instr, "EXIT", 0, 0);
+                    }
                     else
                         throw err;
                 }
@@ -1119,6 +1205,10 @@ class FunctionExecutor {
                         e = error_level_cleaned;
                         throw Error(error_level_cleaned, instr, "CLEAN-ENVIRONMENT", 0, 0);
                     }
+                    else if(e == UNEXPECTED_EXIT) {
+                        e = error_level_exit;
+                        throw Error(error_level_exit, instr, "EXIT", 0, 0);
+                    }
                     else
                         throw err;
                 }
@@ -1159,6 +1249,10 @@ class FunctionExecutor {
                     else if (e == cleaned) {
                         e = error_level_cleaned;
                         throw Error(error_level_cleaned, instr, "CLEAN-ENVIRONMENT", 0, 0);
+                    }
+                    else if(e == UNEXPECTED_EXIT) {
+                        e = error_level_exit;
+                        throw Error(error_level_exit, instr, "EXIT", 0, 0);
                     }
                     else
                         throw err;
@@ -1207,6 +1301,10 @@ class FunctionExecutor {
                         e = error_level_cleaned;
                         throw Error(error_level_cleaned, instr, "CLEAN-ENVIRONMENT", 0, 0);
                     }
+                    else if(e == UNEXPECTED_EXIT) {
+                        e = error_level_exit;
+                        throw Error(error_level_exit, instr, "EXIT", 0, 0);
+                    }
                     else
                         throw err;
                 }
@@ -1252,6 +1350,8 @@ class FunctionExecutor {
         }
 
         Node_Token* clause = args;
+        bool else_encountered = false;
+
         while (clause != nullptr && clause->token.type != NIL) {
             Node_Token* condition = clause->left;
 
@@ -1266,8 +1366,48 @@ class FunctionExecutor {
                 throw Error(error_define_format, instr, "COND format", 0, 0, cur);
             }
 
+            // Check if the test is the 'else' keyword
+            if (test->token.type == SYMBOL && test->token.value == "else") {
+                if (defined_table.find("else") != defined_table.end()) {
+                    // If 'else' is defined, treat it as a normal symbol
+                    Node_Token* evaluated_test = evalution(test, e);
+                    if (evaluated_test->token.type != NIL) {
+                        if (body == nullptr || body->token.type == NIL) {
+                            throw Error(no_return_value, instr, "no_return_value", 0, 0, cur);
+                        }
+
+                        Node_Token* result = nullptr;
+                        while (body != nullptr && body->token.type != NIL) {
+                            result = evalution(body->left, e);
+                            body = body->right;
+                        }
+
+                        return result;
+                    }
+                } else {
+                    // Handle 'else' as a keyword
+                    if (else_encountered) {
+                        throw Error(error_define_format, instr, "Multiple ELSE clauses in COND", 0, 0, cur);
+                    }
+                    else_encountered = true;
+
+                    if (body == nullptr || body->token.type == NIL) {
+                        throw Error(no_return_value, instr, "no_return_value", 0, 0, cur);
+                    }
+
+                    Node_Token* result = nullptr;
+                    while (body != nullptr && body->token.type != NIL) {
+                        result = evalution(body->left, e);
+                        body = body->right;
+                    }
+
+                    return result;
+                }
+            }
+
             Node_Token* evaluated_test = nullptr;
             try {
+                cerr << "\033[1;35m" << "cond_func evaluating test: " << test->token.value << "\033[0m" << endl;
                 evaluated_test = evalution(test, e);
             } catch (Error err) {
                 throw err;
@@ -1308,9 +1448,18 @@ class FunctionExecutor {
     Node_Token* quote_func(Node_Token *cur, Node_Token *args, errorType &e) {
         if (count_args(args) != 1)
             throw Error(incorrect_number_of_arguments, "quote", "incorrect_number_of_arguments", 0, 0);
-        else {
+        else 
             return args->left; // Directly return the quoted expression as is
+        
+    }
+    Node_Token* exit_func(Node_Token *cur, Node_Token *args, errorType &e) {
+        if (count_args(args) != 0)
+            throw Error(incorrect_number_of_arguments, "exit", "incorrect_number_of_arguments", 0, 0);
+        else {
+            e = UNEXPECTED_EXIT;
+            throw Error(UNEXPECTED_EXIT, "exit", "exit", 0, 0);
         }
+        return nullptr;
     }
 
     Node_Token* evalution(Node_Token *cur, errorType &e) {
@@ -1323,14 +1472,6 @@ class FunctionExecutor {
         // Handle atoms
         if (is_ATOM(cur->token.type)) { //  != DOT &&  != QUOTE
             if (cur->token.type == SYMBOL) {
-                // Check if the symbol is bound
-                // if (t->token.is_function) {
-                //     // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-                //     // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-                //     // t->token.value = "#<procedure "+ t->token.value +">";
-                //     // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-                //     // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-                // }
                 if (defined_table.find(cur->token.value) == defined_table.end()){
                     e = unbound_symbol;
                     throw Error(unbound_symbol, cur->token.value, "unbound symbol", cur->token.line, cur->token.column);
@@ -1450,7 +1591,8 @@ class FunctionExecutor {
                 return clean_environment(cur, cur->right, e);
             else if (func_Token->token.value == "quote")
                 return quote_func(cur, cur->right, e);
-            
+            else if (func_Token->token.value == "exit")
+                return exit_func(cur, cur->right, e);
             else { // undefined function
                 // cerr << "\033[1;33m" << "func_Token: " << func_Token->token.value << "\033[0m" << endl;
                 func_name = func_Token->token.value;
@@ -1466,7 +1608,8 @@ class FunctionExecutor {
         else if (cur->left->token.type == DOT) {
             cerr << "------ DOT ---------" << endl;
             cerr << "\033[1;33m" << "DOT: " << cur->left->left->token.value << "\033[0m" << endl;
-            return evalution(cur->left, e); // Return the right child of the dot node
+            cur->left = evalution(cur->left, e);
+            return evalution(cur, e); // Return the right child of the dot node
         }
         else if (cur->left->token.type == QUOTE) {
             // cerr << "\033[1;33m" << "QUOTE: " << cur->right->token.value << "\033[0m" << endl;
@@ -2664,6 +2807,13 @@ public:
                 tmpstr = Get_Str(c_peek, tmptoken, error); // get the string from cin
                 if (tmpstr == "t")
                     tmptoken.value = "#t";
+
+                // if (defined_table.find(tmpstr) != defined_table.end()) {
+                //     // cerr << "\033[1;32m" << "1. defined_table: " << tmpstr << "\033[0m" << endl;
+                //     tmptoken.value = defined_table[tmpstr]->token.value;
+                //     // cerr << "\033[1;32m" << "2. defined_table: " << tmpstr << "\033[0m" << endl;
+                // }
+                
                 if ( func.find(tmpstr) != func.end() )
                     tmptoken.is_function = true;
 
@@ -2980,6 +3130,12 @@ int main() {
                     func = bulid_in_func;
                     Lexical.reset();
                     break;
+                
+                // case procedure:
+                //     cerr << "\033[1;31m" << "procedure" << "\033[0m" << endl;
+                //     cout << e.message << endl;
+                //     Lexical.reset();
+                //     break;
                 
                 default:
                     break;
