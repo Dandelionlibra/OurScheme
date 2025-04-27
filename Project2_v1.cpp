@@ -126,6 +126,8 @@ public:
         column = c;
         root = r;
 
+        if (e_token == "#f") e_token = "nil";
+
         if (t == UNEXPECTED_TOKEN)
             message = "ERROR (unexpected token) : " + e_token + " expected when token at Line " + to_string(line) + " Column " + to_string(column) + " is >>" + c_token + "<<";
         else if (t == UNEXPECTED_CLOSE_PAREN)
@@ -147,8 +149,10 @@ public:
         else if (t == undefined_function)
             message = "ERROR (attempt to apply non-function) : " + e_token;
         else if (t == unbound_symbol) {
-            if (func.find(e_token) != func.end()) message = "#<procedure " + e_token + ">";
-            else message = "ERROR (unbound symbol) : " + e_token;
+            // if (func.find(e_token) != func.end()) message = "#<procedure " + e_token + ">";
+            // else 
+            
+            message = "ERROR (unbound symbol) : " + e_token;
         }
         else if (t == unbound_parameter)
             message = "ERROR (unbound parameter) : "; // Node_Token* r
@@ -273,7 +277,24 @@ class FunctionExecutor {
 
         return is_equ(arg1->left, arg2->left) && is_equ(arg1->right, arg2->right);
     }
-
+    Node_Token* sequence(Node_Token *cur, errorType &e) {
+        Node_Token* node = nullptr;
+        while (cur != nullptr && cur->token.type != NIL) {
+            try {
+                node = evalution(cur->left, e);
+            }
+            catch (Error err) {
+                if (e == no_return_value) {
+                    if (cur->right == nullptr || cur->right->token.type == NIL) throw err; // If it's the last s-exp
+                    else e = Error_None; // otherwise, ignore the error
+                }
+                else throw err;
+            }
+            cur = cur->right;
+        }
+        cerr << "\033[1;35m" << "node: " << node->token.value << "\033[0m" << endl;
+        return node;
+    }
     public:
     Node_Token* define_func(string instr, Node_Token *cur, Node_Token *args, errorType &e) {
         vector<Node_Token*> arg_list;
@@ -524,9 +545,9 @@ class FunctionExecutor {
             }
 
             if (parameter->token.type != DOT) {
-                if (func.find(parameter->token.value) != func.end()) {
+                if (func.find(parameter->token.value) != func.end())
                     return parameter;
-                }
+                
                 e = incorrect_argument_type;
                 string s = parameter->token.value;
                 if (s == "#f") s = "nil";
@@ -571,6 +592,9 @@ class FunctionExecutor {
             }
 
             if (parameter->token.type != DOT) {
+                if (func.find(parameter->token.value) != func.end())
+                    return parameter;
+
                 e = incorrect_argument_type;
                 string s = parameter->token.value;
                 if (s == "#f") s = "nil";
@@ -741,6 +765,12 @@ class FunctionExecutor {
                     string s = arg_list.back()->token.value;
                     throw Error(incorrect_argument_type_list, instr, s, 0, 0, arg_list.back());
                 }
+                // else if (func.find(arg_list.back()->token.value) != func.end()) {
+                //     e = incorrect_argument_type;
+                //     string s = "#<procedure "+ arg_list.back()->token.value + ">" ;
+                    
+                //     throw Error(incorrect_argument_type, instr, s, 0, 0);
+                // }
 
                 t = t->right;
             }
@@ -1338,6 +1368,8 @@ class FunctionExecutor {
                 node->token.type = arg_list.at(1)->token.type;
             }
         }
+        if (func.find(node->token.value) != func.end())
+            node->token.is_function = true;
 
         return node;
     }
@@ -1345,91 +1377,88 @@ class FunctionExecutor {
         Node_Token* node = new Node_Token();
         pointer_gather.insert(node);
 
-        if (args == nullptr || args->token.type == NIL) {
-            throw Error(error_define_format, instr, "COND format", 0, 0, cur);
+        int c = count_args(args);
+        if (count_args(args) < 1)
+            throw Error(error_define_format, instr, "cond_func", 0, 0, cur);
+        
+        Node_Token *t = args;
+        while (t != nullptr && t->token.type != NIL) {
+            int h = 0;
+            if (is_ATOM(t->left->token.type))
+                throw Error(error_define_format, instr, "cond_func", 0, 0, cur);
+            else {
+                Node_Token *tmp = t->left;
+                while (tmp != nullptr && tmp->token.type != NIL) {
+                    h++; // increment height
+                    tmp = tmp->right;
+                }
+                if (h < 2)
+                    throw Error(error_define_format, instr, "cond_func", 0, 0, cur);
+            }
+            t = t->right;
         }
 
-        Node_Token* clause = args;
-        bool else_encountered = false;
-
-        while (clause != nullptr && clause->token.type != NIL) {
-            Node_Token* condition = clause->left;
-
-            if (condition == nullptr || condition->token.type != DOT) {
-                throw Error(error_define_format, instr, "COND format", 0, 0, cur);
-            }
-
-            Node_Token* test = condition->left;
-            Node_Token* body = condition->right;
-
-            if (test == nullptr) {
-                throw Error(error_define_format, instr, "COND format", 0, 0, cur);
-            }
-
-            // Check if the test is the 'else' keyword
-            if (test->token.type == SYMBOL && test->token.value == "else") {
-                if (defined_table.find("else") != defined_table.end()) {
-                    // If 'else' is defined, treat it as a normal symbol
-                    Node_Token* evaluated_test = evalution(test, e);
-                    if (evaluated_test->token.type != NIL) {
-                        if (body == nullptr || body->token.type == NIL) {
-                            throw Error(no_return_value, instr, "no_return_value", 0, 0, cur);
-                        }
-
-                        Node_Token* result = nullptr;
-                        while (body != nullptr && body->token.type != NIL) {
-                            result = evalution(body->left, e);
-                            body = body->right;
-                        }
-
-                        return result;
-                    }
-                } else {
-                    // Handle 'else' as a keyword
-                    if (else_encountered) {
-                        throw Error(error_define_format, instr, "Multiple ELSE clauses in COND", 0, 0, cur);
-                    }
-                    else_encountered = true;
-
-                    if (body == nullptr || body->token.type == NIL) {
-                        throw Error(no_return_value, instr, "no_return_value", 0, 0, cur);
-                    }
-
-                    Node_Token* result = nullptr;
-                    while (body != nullptr && body->token.type != NIL) {
-                        result = evalution(body->left, e);
-                        body = body->right;
-                    }
-
-                    return result;
-                }
-            }
-
-            Node_Token* evaluated_test = nullptr;
+        int num_of_args = 1;
+        t = args;
+        while (t != nullptr && t->token.type != NIL) {
+            Node_Token *parameter = t->left;
+            // cerr << "\033[1;35m" << "parameter: " << parameter->token.value << "\033[0m" << endl;
             try {
-                cerr << "\033[1;35m" << "cond_func evaluating test: " << test->token.value << "\033[0m" << endl;
-                evaluated_test = evalution(test, e);
-            } catch (Error err) {
-                throw err;
+                // 判斷最後的 argument
+                if (t->right->token.type == NIL) {
+                    // cerr << "\033[1;35m" << "last argument: " << parameter->left->token.value << "\033[0m" << endl;
+                    if (parameter->left->token.type == DOT)
+                        parameter->left = evalution(parameter->left, e);
+                        
+                    if (parameter->left->token.type == SYMBOL && parameter->left->token.value == "else")
+                        return sequence(parameter->right, e); // 直接 return right 的執行結果
+                    else {// 非 else
+                        Node_Token* success = evalution(parameter->left, e);
+                        cerr << "\033[1;31m" << "success: " << success->token.value << "\033[0m" << endl;
+                        cerr << "\033[1;31m" << "success: " << success->token.type << "\033[0m" << endl;
+                        if (success->token.type != NIL)
+                            return sequence(parameter->right, e);
+
+                    }
+                }
+                // 非最後的 argument
+                else {
+                    // 可執行
+                    Node_Token* success = evalution(parameter->left, e);
+                    if (success->token.type != NIL) {
+                        cerr << "\033[1;31m" << "success: " << success->token.value << "\033[0m" << endl;
+                        return sequence(parameter->right, e); // 直接 return right 的執行結果
+                    }
+
+                }
+                
+                // arg_list.push_back(evalution(parameter, e));
+            }
+            catch (Error err) {
+                // cerr << "\033[1;35m" << "error: " << error << "\033[0m" << endl;
+                if (e == no_return_value) {
+                    e = unbound_parameter;
+                    throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, parameter);
+                }
+                else if (e == defined || e == error_level_define || e == error_define_format) {
+                    e = error_level_define;
+                    throw Error(error_level_define, instr, "DEFINE", 0, 0);
+                }
+                else if(e == cleaned) {
+                    e = error_level_cleaned;
+                    throw Error(error_level_cleaned, instr, "CLEAN-ENVIRONMENT", 0, 0);
+                }
+                else if(e == UNEXPECTED_EXIT) {
+                    e = error_level_exit;
+                    throw Error(error_level_exit, instr, "EXIT", 0, 0);
+                }
+                else
+                    throw err;
             }
 
-            if (evaluated_test->token.type != NIL) {
-                if (body == nullptr || body->token.type == NIL) {
-                    throw Error(no_return_value, instr, "no_return_value", 0, 0, cur);
-                }
-
-                Node_Token* result = nullptr;
-                while (body != nullptr && body->token.type != NIL) {
-                    result = evalution(body->left, e);
-                    body = body->right;
-                }
-
-                return result;
-            }
-
-            clause = clause->right;
+            t = t->right;
         }
-
+        
         throw Error(no_return_value, instr, "no_return_value", 0, 0, cur);
     }
     Node_Token* clean_environment(Node_Token *cur, Node_Token *args, errorType &e) {
@@ -1472,13 +1501,18 @@ class FunctionExecutor {
         // Handle atoms
         if (is_ATOM(cur->token.type)) { //  != DOT &&  != QUOTE
             if (cur->token.type == SYMBOL) {
-                if (defined_table.find(cur->token.value) == defined_table.end()){
+                cerr << "\033[1;35m" << "---- judge define or not ----\ncur->token.value:" << cur->token.value << "\033[0m" << endl;
+                if (defined_table.find(cur->token.value) != defined_table.end())
+                    return defined_table[cur->token.value]; // Return the bound symbol
+                else if (func.find(cur->token.value) != func.end()){
+                    cur->token.is_function = true;
+                    return cur;
+                }
+                else {
+                    cerr << "\033[1;35m" << "---- judge failed ----\ncur->token.value:" << cur->token.value << "\033[0m" << endl;
                     e = unbound_symbol;
                     throw Error(unbound_symbol, cur->token.value, "unbound symbol", cur->token.line, cur->token.column);
                 }
-                else
-                    return defined_table[cur->token.value]; // Return the bound symbol
-                
             }
             return cur; // Return the atom itself
         }
@@ -1940,7 +1974,7 @@ private:
     
     vector <pair<Token, bool>> dot_appear; // first: pointer to ( , second: (dot appear or not, following data appear or not)
 
-    void process_float(Token &token) {
+    string process_float(Token &token) {
         string str = token.value;
         string sign = "";
 
@@ -1953,8 +1987,8 @@ private:
         // 四捨五入到小數點後第三位
         float float_value = stod(str);
         cerr << "float_value: " << float_value << endl;
-        float_value = round(float_value * 1000.0) / 1000.0;
-        str = to_string(float_value);
+        str = to_string(round(float_value * 1000.0) / 1000.0);
+        cerr << "str: " << str << endl;
 
         // 小數點後大於三位數, 只取到小數點後第三位
         int dot_pos = str.find('.');
@@ -1964,7 +1998,8 @@ private:
         if (sign == "-")
             str = sign + str;
 
-        token.value = str;
+        cerr << "str: " << str << endl;
+        return str;
     }
     bool is_ATOM(TokenType type) {
         // <ATOM> ::= SYMBOL | INT | FLOAT | STRING | NIL | T | Left-PAREN Right-PAREN
@@ -2080,10 +2115,15 @@ private:
                 // cerr << "\033[1;35m" << "** 1.ATOM **" << "\033[0m" << endl;
                 // deal float
                 if (left_token.type == FLOAT)
-                    process_float(left_token);
-                
-                // print_space(countquote);
-                cout << left_token.value << endl;
+                    cout << process_float(left_token) << endl;
+                else {
+                    // print_space(countquote);
+                    // if (func.find(left_token.value) != func.end())
+                    if (left_token.is_function)
+                        cout << "#<procedure " + left_token.value + ">" << endl;
+                    else
+                        cout << left_token.value << endl;
+                }
                 
             }
             Node_Token *tmp = node->right;
@@ -2098,15 +2138,19 @@ private:
                     // cerr << "\033[1;35m" << "** while DOT 2 **" << "\033[0m" << endl;
                     // if (tmp->left->token.type != NIL) {
                         // deal float
-                        if (tmp->left->token.type == FLOAT)
-                            process_float(tmp->left->token);
-        
                         print_space(countquote);
-                        if (tmp->left->token.type == NIL) {
+
+                        if (tmp->left->token.type == FLOAT)
+                            cout << process_float(tmp->left->token) << endl;
+                        else if (tmp->left->token.type == NIL)
                             cout << "nil" << endl;
+                        else{
+                            // if (func.find(tmp->left->token.value) != func.end())
+                            if (tmp->left->token.is_function)
+                                cout << "#<procedure " + tmp->left->token.value + ">" << endl;
+                            else
+                                cout << tmp->left->token.value << endl;
                         }
-                        else
-                            cout << tmp->left->token.value << endl;
                         
                     // }
                     // else if (tmp->left->token.type == NIL) {
@@ -2145,14 +2189,18 @@ private:
             // cerr << "\033[1;35m" << "** 2.ATOM **" << "\033[0m" << endl;
             if (current_token.type != NIL) {
                 // deal float
-                if (current_token.type == FLOAT)
-                    process_float(current_token);
-
                 print_space(countquote);
-                // if (current_token.value == "#f")
-                //     cout << "nil" << endl;
-                // else
-                    cout << current_token.value << endl;
+
+                if (current_token.type == FLOAT)
+                    cout << process_float(current_token) << endl;
+                else {
+                    // cerr << "\033[1;35m" << "** 3.ATOM **" << "\033[0m" << endl;
+                    // if (func.find(current_token.value) != func.end())
+                    if (current_token.is_function)
+                        cout << "#<procedure " + current_token.value + ">" << endl;
+                    else
+                        cout << current_token.value << endl;
+                }
             }
 
 
@@ -2814,8 +2862,10 @@ public:
                 //     // cerr << "\033[1;32m" << "2. defined_table: " << tmpstr << "\033[0m" << endl;
                 // }
                 
-                if ( func.find(tmpstr) != func.end() )
-                    tmptoken.is_function = true;
+                // if ( func.find(tmpstr) != func.end() ){
+                //     cerr << "\033[1;32m" << "func: " << tmpstr << "\033[0m" << endl;
+                    // tmptoken.is_function = true;
+                // }
 
                 tokenBuffer.push_back(tmptoken);
                 // cerr << "\033[1;32m" << "tmpstr: " << tmpstr << "\033[0m" << endl;
