@@ -453,8 +453,12 @@ class FunctionExecutor {
         node->token.type = DOT;
         node->token.value = ".";
 
-        if (count_args(args) < 1)
-            throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
+        if (count_args(args) < 1) {
+            // throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
+            node->token.type = NIL;
+            node->token.value = "#f";
+            return node;
+        }
         else {
             Node_Token* current = node;
             Node_Token* head = node;
@@ -1533,7 +1537,7 @@ class FunctionExecutor {
         // if first argument of (...) is an atom ☆, which is not a symbol
         // ERROR (attempt to apply non-function) : ☆
         Node_Token* func_Token = cur->left;
-        // func_name = func_Token->token.value;
+        func_name = func_Token->token.value;
         if (defined_table.find(func_Token->token.value) != defined_table.end())
             func_name = defined_table[func_Token->token.value]->token.value;
 
