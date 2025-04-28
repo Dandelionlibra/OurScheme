@@ -1254,8 +1254,7 @@ class FunctionExecutor {
         return node;
     }
     Node_Token* begin_func(string instr, Node_Token *cur, Node_Token *args, errorType &e) {
-        Node_Token* node = new Node_Token();
-        pointer_gather.insert(node);
+        Node_Token* node;
         vector<Node_Token*> arg_list;
 
         if (count_args(args) < 1)
@@ -1292,8 +1291,7 @@ class FunctionExecutor {
         }
 
         // Return the last evaluated argument
-        node->token.value = arg_list.back()->token.value;
-        node->token.type = arg_list.back()->token.type;
+        node = arg_list.back();
         return node;
     }
 
@@ -1535,107 +1533,109 @@ class FunctionExecutor {
         // if first argument of (...) is an atom ☆, which is not a symbol
         // ERROR (attempt to apply non-function) : ☆
         Node_Token* func_Token = cur->left;
+        // func_name = func_Token->token.value;
+        if (defined_table.find(func_Token->token.value) != defined_table.end())
+            func_name = defined_table[func_Token->token.value]->token.value;
+
         if ( is_ATOM(func_Token->token.type) ) {
             if (func_Token->token.type != SYMBOL) {
                 e = undefined_function;
                 throw Error(undefined_function, func_Token->token.value, func_Token->token.value ,func_Token->token.line, func_Token->token.column);
             }
-            else if (func_Token->token.value == "define")
+            else if (func_name == "define")
                 return define_func("define", cur, cur->right, e);
-            else if (func_Token->token.value == "cons")
+            else if (func_name == "cons")
                 return cons("cons", cur, cur->right, e);
 
-            // else if (func_Token->token.value == "lambda")
+            // else if (func_name == "lambda")
             
-            else if (func_Token->token.value == "list")
+            else if (func_name == "list")
                 return list_func("list", cur, cur->right, e);
-            else if (func_Token->token.value == "car")
+            else if (func_name == "car")
                 return car("car", cur, cur->right, e);
-            else if (func_Token->token.value == "cdr")
+            else if (func_name == "cdr")
                 return cdr("cdr", cur, cur->right, e);
 
-            else if (func_Token->token.value == "atom?")
+            else if (func_name == "atom?")
                 return judge_elements("atom?", cur, cur->right, e);
-            else if (func_Token->token.value == "pair?")
+            else if (func_name == "pair?")
                 return judge_elements("pair?", cur, cur->right, e);
-            else if (func_Token->token.value == "list?")
+            else if (func_name == "list?")
                 return judge_elements("list?", cur, cur->right, e);
-            else if (func_Token->token.value == "null?")
+            else if (func_name == "null?")
                 return judge_elements("null?", cur, cur->right, e);
-            else if (func_Token->token.value == "integer?")
+            else if (func_name == "integer?")
                 return judge_elements("integer?", cur, cur->right, e);
-            else if (func_Token->token.value == "real?")
+            else if (func_name == "real?")
                 return judge_elements("real?", cur, cur->right, e);
-            else if (func_Token->token.value == "number?")
+            else if (func_name == "number?")
                 return judge_elements("number?", cur, cur->right, e);
-            else if (func_Token->token.value == "string?")
+            else if (func_name == "string?")
                 return judge_elements("string?", cur, cur->right, e);
-            else if (func_Token->token.value == "boolean?")
+            else if (func_name == "boolean?")
                 return judge_elements("boolean?", cur, cur->right, e);
-            else if (func_Token->token.value == "symbol?")
+            else if (func_name == "symbol?")
                 return judge_elements("symbol?", cur, cur->right, e);
 
-            else if (func_Token->token.value == "+")
+            else if (func_name == "+")
                 return implement_arithmetic("+", cur, cur->right, e);
-            else if (func_Token->token.value == "-")
+            else if (func_name == "-")
                 return implement_arithmetic("-", cur, cur->right, e);
-            else if (func_Token->token.value == "*")
+            else if (func_name == "*")
                 return implement_arithmetic("*", cur, cur->right, e);
-            else if (func_Token->token.value == "/")
+            else if (func_name == "/")
                 return implement_arithmetic("/", cur, cur->right, e);
 
-            else if (func_Token->token.value == "not")
+            else if (func_name == "not")
                 return implement_logical("not", cur, cur->right, e);
-            else if (func_Token->token.value == "and")
+            else if (func_name == "and")
                 return implement_logical("and", cur, cur->right, e);
-            else if (func_Token->token.value == "or")
+            else if (func_name == "or")
                 return implement_logical("or", cur, cur->right, e);
 
-            else if (func_Token->token.value == "=")
+            else if (func_name == "=")
                 return compare_func("=", cur, cur->right, e);
-            else if (func_Token->token.value == "<")
+            else if (func_name == "<")
                 return compare_func("<", cur, cur->right, e);
-            else if (func_Token->token.value == ">")
+            else if (func_name == ">")
                 return compare_func(">", cur, cur->right, e);
-            else if (func_Token->token.value == "<=")
+            else if (func_name == "<=")
                 return compare_func("<=", cur, cur->right, e);
-            else if (func_Token->token.value == ">=")
+            else if (func_name == ">=")
                 return compare_func(">=", cur, cur->right, e);
 
-            else if (func_Token->token.value == "string-append")
+            else if (func_name == "string-append")
                 return str_operator("string-append", cur, cur->right, e);
-            else if (func_Token->token.value == "string>?")
+            else if (func_name == "string>?")
                 return str_operator("string>?", cur, cur->right, e);
-            else if (func_Token->token.value == "string<?")
+            else if (func_name == "string<?")
                 return str_operator("string<?", cur, cur->right, e);
-            else if (func_Token->token.value == "string=?")
+            else if (func_name == "string=?")
                 return str_operator("string=?", cur, cur->right, e);
 
-            else if (func_Token->token.value == "eqv?")
+            else if (func_name == "eqv?")
                 return eqv("eqv", cur, cur->right, e);
-            else if (func_Token->token.value == "equal?")
+            else if (func_name == "equal?")
                 return equal("equal?", cur, cur->right, e);
-            else if (func_Token->token.value == "begin")
+            else if (func_name == "begin")
                 return begin_func("begin", cur, cur->right, e);
 
-            else if (func_Token->token.value == "if")
+            else if (func_name == "if")
                 return if_func("if", cur, cur->right, e);
-            else if (func_Token->token.value == "cond")
+            else if (func_name == "cond")
                 return cond_func("cond", cur, cur->right, e);
 
-            else if (func_Token->token.value == "clean-environment")
+            else if (func_name == "clean-environment")
                 return clean_environment(cur, cur->right, e);
-            else if (func_Token->token.value == "quote")
+            else if (func_name == "quote")
                 return quote_func(cur, cur->right, e);
-            else if (func_Token->token.value == "exit")
+            else if (func_name == "exit")
                 return exit_func(cur, cur->right, e);
             else { // undefined function
-                // cerr << "\033[1;33m" << "func_Token: " << func_Token->token.value << "\033[0m" << endl;
-                func_name = func_Token->token.value;
-                cerr << "\033[1;33m" << "func_name: " << func_name << "\033[0m" << endl;
+                // cout << "-------- undefined function --------\n";
                 if (func.find(func_name) == func.end()) {
-                    e = undefined_function;
-                    throw Error(undefined_function, func_name, func_name ,func_Token->token.line, func_Token->token.column);
+                    e = unbound_symbol;
+                    throw Error(unbound_symbol, func_name, func_name ,func_Token->token.line, func_Token->token.column);
                 }
 
             }
