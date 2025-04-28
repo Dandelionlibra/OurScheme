@@ -197,9 +197,6 @@ void clear_pointer_gather() {
 
 class FunctionExecutor {
     private:
-    
-    // vector<Node_Token*> arg_list;
-
     int count_args(Node_Token *args) {
         int count = 0;
         while (args->left != nullptr) {
@@ -302,6 +299,10 @@ class FunctionExecutor {
             e = error_define_format;
             throw Error(error_define_format, "DEFINE", "error_define_format", 0, 0, cur);
         }
+        else if (cur->parent != nullptr){
+            e = error_level_define;
+            throw Error(error_level_define, instr, "DEFINE", 0, 0);
+        }
         else {
             Node_Token *t = args;
             // ! while (t != nullptr && t->token.type != NIL)
@@ -315,6 +316,8 @@ class FunctionExecutor {
                     }
                     else if (parameter->token.type == DOT) {
                         // proj 3
+                        e = error_define_format;
+                        throw Error(error_define_format, "DEFINE", "error_define_format", 0, 0, cur);
                     }
                     else if (parameter->token.type == SYMBOL) {
                         // none reserved word
@@ -757,24 +760,14 @@ class FunctionExecutor {
 
                 if (arg_list.back()->token.type == FLOAT)
                     float_flag = true;
-                else if (arg_list.back()->token.type == T || arg_list.back()->token.type == NIL) {
-                    // ERROR (+ with incorrect argument type) : #t
+                else if (arg_list.back()->token.type != INT && arg_list.back()->token.type != FLOAT) {
                     e = incorrect_argument_type;
                     string s = arg_list.back()->token.value;
                     if (s == "#f") s = "nil";
+                    else if (bulid_in_func.find(arg_list.back()->token.value) != bulid_in_func.end())
+                        s = "#<procedure " + arg_list.back()->token.value + ">";
                     throw Error(incorrect_argument_type, instr, s, 0, 0);
                 }
-                else if (arg_list.back()->token.type == DOT) {
-                    e = incorrect_argument_type_list;
-                    string s = arg_list.back()->token.value;
-                    throw Error(incorrect_argument_type_list, instr, s, 0, 0, arg_list.back());
-                }
-                // else if (func.find(arg_list.back()->token.value) != func.end()) {
-                //     e = incorrect_argument_type;
-                //     string s = "#<procedure "+ arg_list.back()->token.value + ">" ;
-                    
-                //     throw Error(incorrect_argument_type, instr, s, 0, 0);
-                // }
 
                 t = t->right;
             }
@@ -1468,6 +1461,10 @@ class FunctionExecutor {
     Node_Token* clean_environment(Node_Token *cur, Node_Token *args, errorType &e) {
         if (count_args(args) != 0)
             throw Error(incorrect_number_of_arguments, "clean-environment", "incorrect_number_of_arguments", 0, 0);
+        else if (cur->parent != nullptr){
+            e = error_level_cleaned;
+            throw Error(error_level_cleaned, "CLEAN-ENVIRONMENT", "CLEAN-ENVIRONMENT", 0, 0);
+        }
         else {
             func.clear();
             defined_table.clear();
@@ -1488,6 +1485,10 @@ class FunctionExecutor {
     Node_Token* exit_func(Node_Token *cur, Node_Token *args, errorType &e) {
         if (count_args(args) != 0)
             throw Error(incorrect_number_of_arguments, "exit", "incorrect_number_of_arguments", 0, 0);
+        else if (cur->parent != nullptr){
+            e = error_level_exit;
+            throw Error(error_level_exit, "EXIT", "exit", 0, 0);
+        }
         else {
             e = UNEXPECTED_EXIT;
             throw Error(UNEXPECTED_EXIT, "exit", "exit", 0, 0);
@@ -1917,6 +1918,7 @@ class AST_Tree {
     AST_Tree(Node_Token* r) : root(r) {}
 
     void build_AST(vector<Token> tokenBuffer) {
+        root = nullptr;
         tokens = tokenBuffer;
         // cerr << "\033[1;34menter build_AST\033[0m" << endl;
         int index = 0;
