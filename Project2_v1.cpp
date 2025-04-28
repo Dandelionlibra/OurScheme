@@ -1054,7 +1054,7 @@ class FunctionExecutor {
         node->token.value = "#t";
         node->token.type = T;
 
-        if (count_args(args) < 2)
+        if (count_args(args) != 2)
             throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
         else {
             Node_Token *t = args;
@@ -1452,7 +1452,7 @@ class FunctionExecutor {
                 return str_operator("string=?", cur, cur->right, e);
 
             else if (func_name == "eqv?")
-                return eqv("eqv", cur, cur->right, e);
+                return eqv("eqv?", cur, cur->right, e);
             else if (func_name == "equal?")
                 return equal("equal?", cur, cur->right, e);
             else if (func_name == "begin")
