@@ -742,31 +742,23 @@ class FunctionExecutor {
                         e = unbound_parameter;
                         throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, parameter);
                     }
-                    else if (e == defined || e == error_level_define || e == error_define_format) {
-                        e = error_level_define;
-                        throw Error(error_level_define, instr, "DEFINE", 0, 0);
-                    }
-                    else if(e == cleaned) {
-                        e = error_level_cleaned;
-                        throw Error(error_level_cleaned, instr, "CLEAN-ENVIRONMENT", 0, 0);
-                    }
-                    else if(e == UNEXPECTED_EXIT) {
-                        e = error_level_exit;
-                        throw Error(error_level_exit, instr, "EXIT", 0, 0);
-                    }
                     else
                         throw err;
                 }
 
                 if (arg_list.back()->token.type == FLOAT)
                     float_flag = true;
+                else if (arg_list.back()->token.type == DOT) {
+                    e = incorrect_argument_type_list;
+                    throw Error(incorrect_argument_type_list, instr, "incorrect_argument_type_list", 0, 0, arg_list.back());
+                }
                 else if (arg_list.back()->token.type != INT && arg_list.back()->token.type != FLOAT) {
                     e = incorrect_argument_type;
                     string s = arg_list.back()->token.value;
                     if (s == "#f") s = "nil";
                     else if (bulid_in_func.find(arg_list.back()->token.value) != bulid_in_func.end())
                         s = "#<procedure " + arg_list.back()->token.value + ">";
-                    throw Error(incorrect_argument_type, instr, s, 0, 0);
+                    throw Error(incorrect_argument_type, instr, s, 0, 0, arg_list.back());
                 }
 
                 t = t->right;
