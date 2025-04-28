@@ -292,13 +292,13 @@ class FunctionExecutor {
     public:
     Node_Token* define_func(string instr, Node_Token *cur, Node_Token *args, errorType &e) {
         vector<Node_Token*> arg_list;
-        if (count_args(args) != 2) {
-            e = error_define_format;
-            throw Error(error_define_format, "DEFINE", "error_define_format", 0, 0, cur);
-        }
-        else if (cur->parent != nullptr){
+        if (cur->parent != nullptr){
             e = error_level_define;
             throw Error(error_level_define, instr, "DEFINE", 0, 0);
+        }
+        else if (count_args(args) != 2) {
+            e = error_define_format;
+            throw Error(error_define_format, "DEFINE", "error_define_format", 0, 0, cur);
         }
         else {
             Node_Token *t = args;
@@ -367,14 +367,7 @@ class FunctionExecutor {
                     }
                 }
 
-                // !need?
-                if (i == 0 && arg_list.at(0)->token.type != SYMBOL) {
-                    cerr << "\033[1;35m" << "arg_list.at(0)->token.type: " << arg_list.at(0)->token.type << "\033[0m" << endl;
-                    e = error_define_format;
-                    throw Error(error_define_format, "DEFINE", "error_define_format", 0, 0, cur);
-                }
-                // !need?
-                else if (i == 1) {
+                if (i == 1) {
                     defined_table[arg_list.at(0)->token.value] = arg_list.at(1);
                     e = defined;
                     throw Error(defined, arg_list.at(0)->token.value, "defined la la", 0, 0, cur);
@@ -1292,12 +1285,12 @@ class FunctionExecutor {
         throw Error(no_return_value, instr, "no_return_value", 0, 0, cur);
     }
     Node_Token* clean_environment(Node_Token *cur, Node_Token *args, errorType &e) {
-        if (count_args(args) != 0)
-            throw Error(incorrect_number_of_arguments, "clean-environment", "incorrect_number_of_arguments", 0, 0);
-        else if (cur->parent != nullptr){
+        if (cur->parent != nullptr){
             e = error_level_cleaned;
             throw Error(error_level_cleaned, "CLEAN-ENVIRONMENT", "CLEAN-ENVIRONMENT", 0, 0);
         }
+        else if (count_args(args) != 0)
+            throw Error(incorrect_number_of_arguments, "clean-environment", "incorrect_number_of_arguments", 0, 0);
         else {
             func.clear();
             defined_table.clear();
@@ -1316,12 +1309,13 @@ class FunctionExecutor {
         
     }
     Node_Token* exit_func(Node_Token *cur, Node_Token *args, errorType &e) {
-        if (count_args(args) != 0)
-            throw Error(incorrect_number_of_arguments, "exit", "incorrect_number_of_arguments", 0, 0);
-        else if (cur->parent != nullptr){
+        if (cur->parent != nullptr){
             e = error_level_exit;
-            throw Error(error_level_exit, "EXIT", "exit", 0, 0);
+            throw Error(error_level_exit, "EXIT", "EXIT", 0, 0);
         }
+        else if (count_args(args) != 0)
+            throw Error(incorrect_number_of_arguments, "exit", "incorrect_number_of_arguments", 0, 0);
+        
         else {
             e = UNEXPECTED_EXIT;
             throw Error(UNEXPECTED_EXIT, "exit", "exit", 0, 0);
