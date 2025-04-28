@@ -127,6 +127,7 @@ public:
         root = r;
 
         if (e_token == "#f") e_token = "nil";
+        // if (c_token == "#f") c_token = "nil";
 
         if (t == UNEXPECTED_TOKEN)
             message = "ERROR (unexpected token) : " + e_token + " expected when token at Line " + to_string(line) + " Column " + to_string(column) + " is >>" + c_token + "<<";
@@ -148,12 +149,8 @@ public:
             message = "ERROR (" + e_token + " with incorrect argument type) : "; // Node_Token* r
         else if (t == undefined_function)
             message = "ERROR (attempt to apply non-function) : " + e_token;
-        else if (t == unbound_symbol) {
-            // if (func.find(e_token) != func.end()) message = "#<procedure " + e_token + ">";
-            // else 
-            
+        else if (t == unbound_symbol) 
             message = "ERROR (unbound symbol) : " + e_token;
-        }
         else if (t == unbound_parameter)
             message = "ERROR (unbound parameter) : "; // Node_Token* r
         else if (t == no_return_value)
@@ -413,14 +410,6 @@ class FunctionExecutor {
                         e = unbound_parameter;
                         throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, parameter);
                     }
-                    else if (e == defined || e == error_level_define || e == error_define_format) {
-                        e = error_level_define;
-                        throw Error(error_level_define, instr, "DEFINE", 0, 0);
-                    }
-                    else if(e == cleaned) {
-                        e = error_level_cleaned;
-                        throw Error(error_level_cleaned, instr, "CLEAN-ENVIRONMENT", 0, 0);
-                    }
                     else
                         throw err;
                 }
@@ -478,18 +467,6 @@ class FunctionExecutor {
                         e = unbound_parameter;
                         throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, parameter);
                     }
-                    else if (e == defined || e == error_level_define || e == error_define_format) {
-                        e = error_level_define;
-                        throw Error(error_level_define, instr, "DEFINE", 0, 0);
-                    }
-                    else if (e == cleaned) {
-                        e = error_level_cleaned;
-                        throw Error(error_level_cleaned, instr, "CLEAN-ENVIRONMENT", 0, 0);
-                    }
-                    else if(e == UNEXPECTED_EXIT) {
-                        e = error_level_exit;
-                        throw Error(error_level_exit, instr, "EXIT", 0, 0);
-                    }
                     else
                         throw err;
                 }
@@ -517,10 +494,6 @@ class FunctionExecutor {
         }
     }
     Node_Token* car(string instr, Node_Token *cur, Node_Token *args, errorType &e) {
-        // Node_Token* node = new Node_Token();
-        // pointer_gather.insert(node);
-        // vector<Node_Token*> arg_list;
-
         if (count_args(args) != 1)
             throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
         else {
@@ -535,18 +508,6 @@ class FunctionExecutor {
                     e = unbound_parameter;
                     throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, parameter);
                 }
-                else if (e == defined || e == error_level_define || e == error_define_format) {
-                    e = error_level_define;
-                    throw Error(error_level_define, instr, "DEFINE", 0, 0);
-                }
-                else if(e == cleaned) {
-                    e = error_level_cleaned;
-                    throw Error(error_level_cleaned, instr, "CLEAN-ENVIRONMENT", 0, 0);
-                }
-                else if(e == UNEXPECTED_EXIT) {
-                    e = error_level_exit;
-                    throw Error(error_level_exit, instr, "EXIT", 0, 0);
-                }
                 else
                     throw err;
             }
@@ -560,9 +521,9 @@ class FunctionExecutor {
                 if (s == "#f") s = "nil";
                 throw Error(incorrect_argument_type, instr, s, 0, 0);
             }
-            else {
+            else 
                 return parameter->left;
-            }
+            
         }
 
         // return nullptr;
@@ -582,18 +543,6 @@ class FunctionExecutor {
                     e = unbound_parameter;
                     throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, parameter);
                 }
-                else if (e == defined || e == error_level_define || e == error_define_format) {
-                    e = error_level_define;
-                    throw Error(error_level_define, instr, "DEFINE", 0, 0);
-                }
-                else if (e == cleaned) {
-                    e = error_level_cleaned;
-                    throw Error(error_level_cleaned, instr, "CLEAN-ENVIRONMENT", 0, 0);
-                }
-                else if(e == UNEXPECTED_EXIT) {
-                    e = error_level_exit;
-                    throw Error(error_level_exit, instr, "EXIT", 0, 0);
-                }
                 else
                     throw err;
             }
@@ -607,9 +556,9 @@ class FunctionExecutor {
                 if (s == "#f") s = "nil";
                 throw Error(incorrect_argument_type, instr, s, 0, 0);
             }
-            else {
+            else 
                 return parameter->right;
-            }
+            
         }
     }
     
@@ -633,18 +582,6 @@ class FunctionExecutor {
                     if (e == no_return_value) {
                         e = unbound_parameter;
                         throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, parameter);
-                    }
-                    else if (e == defined || e == error_level_define || e == error_define_format) {
-                        e = error_level_define;
-                        throw Error(error_level_define, instr, "DEFINE", 0, 0);
-                    }
-                    else if(e == cleaned) {
-                        e = error_level_cleaned;
-                        throw Error(error_level_cleaned, instr, "CLEAN-ENVIRONMENT", 0, 0);
-                    }
-                    else if(e == UNEXPECTED_EXIT) {
-                        e = error_level_exit;
-                        throw Error(error_level_exit, instr, "EXIT", 0, 0);
                     }
                     else
                         throw err;
@@ -916,18 +853,6 @@ class FunctionExecutor {
                         e = unbound_parameter;
                         throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, parameter);
                     }
-                    else if (e == defined || e == error_level_define || e == error_define_format) {
-                        e = error_level_define;
-                        throw Error(error_level_define, instr, "DEFINE", 0, 0);
-                    }
-                    else if(e == cleaned) {
-                        e = error_level_cleaned;
-                        throw Error(error_level_cleaned, instr, "CLEAN-ENVIRONMENT", 0, 0);
-                    }
-                    else if(e == UNEXPECTED_EXIT) {
-                        e = error_level_exit;
-                        throw Error(error_level_exit, instr, "EXIT", 0, 0);
-                    }
                     else
                         throw err;
                 }
@@ -1058,18 +983,6 @@ class FunctionExecutor {
                         e = unbound_parameter;
                         throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, parameter);
                     }
-                    else if (e == defined || e == error_level_define || e == error_define_format) {
-                        e = error_level_define;
-                        throw Error(error_level_define, instr, "DEFINE", 0, 0);
-                    }
-                    else if(e == cleaned) {
-                        e = error_level_cleaned;
-                        throw Error(error_level_cleaned, instr, "CLEAN-ENVIRONMENT", 0, 0);
-                    }
-                    else if(e == UNEXPECTED_EXIT) {
-                        e = error_level_exit;
-                        throw Error(error_level_exit, instr, "EXIT", 0, 0);
-                    }
                     else
                         throw err;
                 }
@@ -1168,18 +1081,6 @@ class FunctionExecutor {
                         e = unbound_parameter;
                         throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, parameter);
                     }
-                    else if (e == defined || e == error_level_define || e == error_define_format) {
-                        e = error_level_define;
-                        throw Error(error_level_define, instr, "DEFINE", 0, 0);
-                    }
-                    else if(e == cleaned) {
-                        e = error_level_cleaned;
-                        throw Error(error_level_cleaned, instr, "CLEAN-ENVIRONMENT", 0, 0);
-                    }
-                    else if(e == UNEXPECTED_EXIT) {
-                        e = error_level_exit;
-                        throw Error(error_level_exit, instr, "EXIT", 0, 0);
-                    }
                     else
                         throw err;
                 }
@@ -1216,18 +1117,6 @@ class FunctionExecutor {
                         e = unbound_parameter;
                         throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, parameter);
                     }
-                    else if (e == defined || e == error_level_define || e == error_define_format) {
-                        e = error_level_define;
-                        throw Error(error_level_define, instr, "DEFINE", 0, 0);
-                    }
-                    else if(e == cleaned) {
-                        e = error_level_cleaned;
-                        throw Error(error_level_cleaned, instr, "CLEAN-ENVIRONMENT", 0, 0);
-                    }
-                    else if(e == UNEXPECTED_EXIT) {
-                        e = error_level_exit;
-                        throw Error(error_level_exit, instr, "EXIT", 0, 0);
-                    }
                     else
                         throw err;
                 }
@@ -1259,18 +1148,6 @@ class FunctionExecutor {
                     if (e == no_return_value) {
                         e = unbound_parameter;
                         throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, parameter);
-                    }
-                    else if (e == defined || e == error_level_define || e == error_define_format) {
-                        e = error_level_define;
-                        throw Error(error_level_define, instr, "DEFINE", 0, 0);
-                    }
-                    else if (e == cleaned) {
-                        e = error_level_cleaned;
-                        throw Error(error_level_cleaned, instr, "CLEAN-ENVIRONMENT", 0, 0);
-                    }
-                    else if(e == UNEXPECTED_EXIT) {
-                        e = error_level_exit;
-                        throw Error(error_level_exit, instr, "EXIT", 0, 0);
                     }
                     else
                         throw err;
@@ -1309,18 +1186,6 @@ class FunctionExecutor {
                         // cerr << "\033[1;32m" << "error: " << "no return value" << "\033[0m" << endl;
                         e = unbound_test_condition;
                         throw Error(unbound_test_condition, instr, "unbound_test_condition", 0, 0, parameter);
-                    }
-                    else if (e == defined || e == error_level_define || e == error_define_format) {
-                        e = error_level_define;
-                        throw Error(error_level_define, instr, "DEFINE", 0, 0);
-                    }
-                    else if(e == cleaned) {
-                        e = error_level_cleaned;
-                        throw Error(error_level_cleaned, instr, "CLEAN-ENVIRONMENT", 0, 0);
-                    }
-                    else if(e == UNEXPECTED_EXIT) {
-                        e = error_level_exit;
-                        throw Error(error_level_exit, instr, "EXIT", 0, 0);
                     }
                     else
                         throw err;
@@ -1428,18 +1293,6 @@ class FunctionExecutor {
                 if (e == no_return_value) {
                     e = unbound_parameter;
                     throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, parameter);
-                }
-                else if (e == defined || e == error_level_define || e == error_define_format) {
-                    e = error_level_define;
-                    throw Error(error_level_define, instr, "DEFINE", 0, 0);
-                }
-                else if(e == cleaned) {
-                    e = error_level_cleaned;
-                    throw Error(error_level_cleaned, instr, "CLEAN-ENVIRONMENT", 0, 0);
-                }
-                else if(e == UNEXPECTED_EXIT) {
-                    e = error_level_exit;
-                    throw Error(error_level_exit, instr, "EXIT", 0, 0);
                 }
                 else
                     throw err;
