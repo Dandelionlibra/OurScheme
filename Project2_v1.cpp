@@ -772,18 +772,6 @@ class FunctionExecutor {
                         e = unbound_parameter;
                         throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, parameter);
                     }
-                    else if (e == defined || e == error_level_define || e == error_define_format) {
-                        e = error_level_define;
-                        throw Error(error_level_define, instr, "DEFINE", 0, 0);
-                    }
-                    else if(e == cleaned) {
-                        e = error_level_cleaned;
-                        throw Error(error_level_cleaned, instr, "CLEAN-ENVIRONMENT", 0, 0);
-                    }
-                    else if(e == UNEXPECTED_EXIT) {
-                        e = error_level_exit;
-                        throw Error(error_level_exit, instr, "EXIT", 0, 0);
-                    }
                     else
                         throw err;
                 }
@@ -859,7 +847,7 @@ class FunctionExecutor {
 
                 if(arg_list.back()->token.type == FLOAT)
                     float_flag = true;
-                else if (arg_list.back()->token.type == T || arg_list.back()->token.type == NIL) {
+                else if (arg_list.back()->token.type != INT && arg_list.back()->token.type != FLOAT) {
                     // ERROR (+ with incorrect argument type) : #t
                     e = incorrect_argument_type;
                     string s = arg_list.back()->token.value;
