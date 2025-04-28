@@ -1099,18 +1099,14 @@ class FunctionExecutor {
     }
 
     Node_Token* if_func(string instr, Node_Token *cur, Node_Token *args, errorType &e) {
-        Node_Token* node = new Node_Token();
-        pointer_gather.insert(node);
         vector<Node_Token*> arg_list;
-        bool float_flag = false;
-        node->token.value = "#t";
-        node->token.type = T;
 
         int c = count_args(args);
         if (c != 2 && c != 3)
             throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
         else {
             Node_Token *t = args;
+            int case_num = 0;
             while (t != nullptr && t->token.type != NIL) {
                 Node_Token *parameter = t->left;
                 try {
@@ -1124,36 +1120,30 @@ class FunctionExecutor {
                     else
                         throw err;
                 }
-                // ! need ??????????
-                // if (arg_list.back()->token.type == DOT) {
-                //     e = incorrect_argument_type_list;
-                //     string s = arg_list.back()->token.value;
-                //     throw Error(incorrect_argument_type_list, instr, s, 0, 0, arg_list.back());
-                // }
-                // ! need ??????????
 
+                if (c == 2) {
+                    if (case_num == 0) {
+                        if (arg_list.back()->token.type == NIL)
+                            throw Error(no_return_value, instr, "no_return_value", 0, 0, cur);
+                    }
+                    else 
+                        return arg_list.back();
+                }
+                else if (c == 3) {
+                    if (case_num == 0) {
+                        if (arg_list.back()->token.type == NIL)
+                            t = t->right; // 進入 else 的情況(第三個參數)，跳過第二個參數
+                    }
+                    else
+                        return arg_list.back();
+                }
+
+                case_num++;
                 t = t->right;
             }
         }
 
-        if (c == 2) {
-            if (arg_list.at(0)->token.type == NIL)
-                throw Error(no_return_value, instr, "no_return_value", 0, 0, cur);
-            else 
-                node = arg_list.at(1);
-        }
-        else if (c == 3) {
-            if (arg_list.at(0)->token.type == NIL) {
-                cerr << "\033[1;35m" << "if NIL, go to else." << "\033[0m" << endl;
-                node = arg_list.at(2);
-            }
-            else {
-                cerr << "\033[1;35m" << "if #t, go to first arg." << "\033[0m" << endl;
-                node = arg_list.at(1);
-            }
-        }
-
-        return node;
+        return nullptr;
     }
     Node_Token* cond_func(string instr, Node_Token *cur, Node_Token *args, errorType &e) {
         Node_Token* node = new Node_Token();
