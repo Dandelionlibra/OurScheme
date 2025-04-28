@@ -1339,11 +1339,11 @@ class FunctionExecutor {
                         throw err;
                 }
                 // ! need ??????????
-                if (arg_list.back()->token.type == DOT) {
-                    e = incorrect_argument_type_list;
-                    string s = arg_list.back()->token.value;
-                    throw Error(incorrect_argument_type_list, instr, s, 0, 0, arg_list.back());
-                }
+                // if (arg_list.back()->token.type == DOT) {
+                //     e = incorrect_argument_type_list;
+                //     string s = arg_list.back()->token.value;
+                //     throw Error(incorrect_argument_type_list, instr, s, 0, 0, arg_list.back());
+                // }
                 // ! need ??????????
 
                 t = t->right;
@@ -1353,19 +1353,21 @@ class FunctionExecutor {
         if (c == 2) {
             if (arg_list.at(0)->token.type == NIL)
                 throw Error(no_return_value, instr, "no_return_value", 0, 0, cur);
-            else {
-                node->token.value = arg_list.at(1)->token.value;
-                node->token.type = arg_list.at(1)->token.type;
-            }
+            else 
+                node = arg_list.at(1);
         }
         else if (c == 3) {
             if (arg_list.at(0)->token.type == NIL) {
-                node->token.value = arg_list.at(2)->token.value;
-                node->token.type = arg_list.at(2)->token.type;
+                cerr << "\033[1;35m" << "if NIL, go to else." << "\033[0m" << endl;
+                node = arg_list.at(2);
+                // node->token.value = arg_list.at(2)->token.value;
+                // node->token.type = arg_list.at(2)->token.type;
             }
             else {
-                node->token.value = arg_list.at(1)->token.value;
-                node->token.type = arg_list.at(1)->token.type;
+                cerr << "\033[1;35m" << "if #t, go to first arg." << "\033[0m" << endl;
+                node = arg_list.at(1);
+                // node->token.value = arg_list.at(1)->token.value;
+                // node->token.type = arg_list.at(1)->token.type;
             }
         }
         if (func.find(node->token.value) != func.end())
