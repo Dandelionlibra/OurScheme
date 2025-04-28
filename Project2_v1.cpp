@@ -1461,7 +1461,7 @@ class FunctionExecutor {
             else if (func_name == "if")
                 return if_func("if", cur, cur->right, e);
             else if (func_name == "cond")
-                return cond_func("cond", cur, cur->right, e);
+                return cond_func("COND", cur, cur->right, e);
 
             else if (func_name == "clean-environment")
                 return clean_environment(cur, cur->right, e);
