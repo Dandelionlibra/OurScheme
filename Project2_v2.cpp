@@ -728,6 +728,32 @@ class FunctionExecutor {
                 Node_Token *parameter = t->left;
                 try {
                     arg_list.push_back(evalution(parameter, e));
+                    if (instr == "not") {
+                        if (arg_list.back()->token.type != NIL) {
+                            node->token.value = "#f";
+                            node->token.type = NIL;
+                        }
+                    }
+                    /*
+                    第一個被計算為 nil 則回傳 nil
+                    如果不是 nil 則回傳最後一個計算出的值
+                    */
+                    else if (instr == "and") {
+                        if (arg_list.back()->token.type == NIL)
+                            return arg_list.back();
+                        else 
+                            node = arg_list.back();
+                    }
+                    /* 
+                    第一個被計算為非 nil 則直接回傳
+                    如果前面都是 nil 則回傳最後一個的值
+                    */
+                    else if (instr == "or") {
+                        if (arg_list.back()->token.type != NIL)
+                            return arg_list.back();
+                        else
+                            node = arg_list.back();
+                    }
                 }
                 catch (Error err) {
                     if (e == no_return_value) {
@@ -741,41 +767,6 @@ class FunctionExecutor {
                 t = t->right;
             }
         }
-
-        if (instr == "not") {
-            if (arg_list.at(0)->token.type != NIL) {
-                node->token.value = "#f";
-                node->token.type = NIL;
-            }
-        }
-        else if (instr == "and") {
-            /*
-            第一個被計算為 nil 則回傳 nil
-            如果不是 nil 則回傳最後一個計算出的值
-            */
-            for (int i = 0 ; i < arg_list.size() ; i++){
-                node->token.is_function = arg_list.at(i)->token.is_function;
-                node->token.value = arg_list.at(i)->token.value;
-                cerr << "\033[1;33m" << "arg_list.at(i)->token.value: " << arg_list.at(i)->token.value << "\033[0m" << endl;
-                node->token.type = arg_list.at(i)->token.type;
-                if (arg_list.at(i)->token.type == NIL)
-                    return node;
-            }
-        }
-        else if (instr == "or") {
-            /* 
-            第一個被計算為非 nil 則直接回傳
-            如果前面都是 nil 則回傳最後一個的值
-            */
-            for (int i = 0 ; i < arg_list.size() ; i++){
-                node->token.is_function = arg_list.at(i)->token.is_function;
-                node->token.value = arg_list.at(i)->token.value;
-                node->token.type = arg_list.at(i)->token.type;
-                if (arg_list.at(i)->token.type != NIL)
-                    return node;
-            }
-        }
-
 
         return node;
     }
