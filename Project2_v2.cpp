@@ -347,6 +347,8 @@ class FunctionExecutor {
 
                 if (i == 1) {
                     defined_table[arg_list.at(0)->token.value] = arg_list.at(1);
+                    cerr << "\033[1;35m" << "arg_list.at(0): " << arg_list.at(0)->token.value << "\033[0m" << endl;
+                    cerr << "\033[1;35m" << "arg_list.at(1): " << arg_list.at(1)->token.value << "\033[0m" << endl;
                     e = defined;
                     throw Error(defined, arg_list.at(0)->token.value, "defined la la", 0, 0, cur);
                 
@@ -1302,16 +1304,20 @@ class FunctionExecutor {
         // ERROR (attempt to apply non-function) : ☆
         Node_Token* func_Token = cur->left;
         func_name = func_Token->token.value;
-        if (defined_table.find(func_Token->token.value) != defined_table.end())
-            func_name = defined_table[func_Token->token.value]->token.value; // "Best"
+        cerr << "\033[1;33m" << "func_name: " << func_name << "\033[0m" << endl;
+        cerr << "\033[1;33m" << "func_Token->token.value: " << func_Token->token.value << "\033[0m" << endl;
+        cerr << "\033[1;33m" << "func_Token->token.type: " << func_Token->token.type << "\033[0m" << endl;
 
-        if ( is_ATOM(func_Token->token.type) ) {
-            if (func_Token->token.type != SYMBOL ) { // || bulid_in_func.find(func_name) == bulid_in_func.end()
-                e = undefined_function;
-                throw Error(undefined_function, func_Token->token.value, func_Token->token.value ,func_Token->token.line, func_Token->token.column, func_Token);
-            }
+        if ( is_ATOM(func_Token->token.type) && func_Token->token.type != SYMBOL) {
+            e = undefined_function;
+            throw Error(undefined_function, func_Token->token.value, func_Token->token.value ,func_Token->token.line, func_Token->token.column, func_Token);
+        }
+        else if (func_Token->token.type == SYMBOL || func_Token->token.type == QUOTE) {
+            cerr << "\033[1;35m" << "is_ATOM(func_Token->token.type): " << func_Token->token.value << "\033[0m" << endl;
+            // if (func_Token->token.type != SYMBOL ) { // || bulid_in_func.find(func_name) == bulid_in_func.end()
+            // }
             
-            else if (func_name == "define")
+            if (func_name == "define")
                 return define_func("define", cur, cur->right, e);
             else if (func_name == "cons")
                 return cons("cons", cur, cur->right, e);
@@ -1396,41 +1402,59 @@ class FunctionExecutor {
 
             else if (func_name == "clean-environment")
                 return clean_environment(cur, cur->right, e);
-            else if (func_name == "quote")
+            else if (func_Token->token.type == QUOTE) // func_name == "quote"
                 return quote_func(cur, cur->right, e);
             else if (func_name == "exit")
                 return exit_func(cur, cur->right, e);
-
-            // else if (bulid_in_func.find(func_name) == bulid_in_func.end()) {
-            //     e = undefined_function;
-            //     throw Error(undefined_function, func_Token->token.value, func_Token->token.value ,func_Token->token.line, func_Token->token.column, func_Token);
-            // }
             else { // undefined function
-                // cout << "-------- undefined function --------\n";
-                if (bulid_in_func.find(func_name) == bulid_in_func.end()) {
-                    e = unbound_symbol;
-                    throw Error(unbound_symbol, func_name, func_name ,func_Token->token.line, func_Token->token.column, cur);
-                }
-
+                cerr << "-------- undefined function --------\n";
+                
+                e = unbound_symbol;
+                throw Error(unbound_symbol, func_name, func_name ,func_Token->token.line, func_Token->token.column, cur);
             }
 
         }
-        else if (cur->left->token.type == DOT) {
-            cerr << "------ DOT ---------" << endl;
-            cerr << "\033[1;33m" << "DOT: " << cur->left->left->token.value << "\033[0m" << endl;
-            cur->left = evalution(cur->left, e);
-            if (bulid_in_func.find(cur->left->token.value) == bulid_in_func.end()) {
+        else { // the first argument of ( ... ) is ( 。。。 ), i.e., it is ( ( 。。。 ) ...... )
+            // evaluate ( 。。。 )
+            Node_Token* t = evalution(func_Token, e);
+
+            // check whether the evaluated result (of ( 。。。 )) is an internal function
+            if (bulid_in_func.find(t->token.value) != bulid_in_func.end()) {
+                Node_Token* node = new Node_Token();
+                node->token.type = DOT;
+                node->token.value = ".";
+                node->left =t;
+                node->right = cur->right;
+                return evalution(node, e);
+            }
+            else {
                 e = undefined_function;
-                throw Error(undefined_function, cur->left->token.value, cur->left->token.value ,0, 0, cur->left);
+                throw Error(undefined_function, t->token.value, t->token.value ,0, 0, t);
             }
-            return evalution(cur, e); // Return the right child of the dot node
-        }
-        else if (cur->left->token.type == QUOTE) {
-            // cerr << "\033[1;33m" << "QUOTE: " << cur->right->token.value << "\033[0m" << endl;
-            // cerr << "\033[1;33m" << "QUOTE: " << cur->right->token.value << "\033[0m" << endl;
 
-            return cur->right->left; // Return the quoted expression as is
         }
+
+
+
+        // else if (cur->left->token.type == DOT) {
+        //     cerr << "------ DOT ---------" << endl;
+        //     cerr << "\033[1;33m" << "DOT: " << cur->left->left->token.value << "\033[0m" << endl;
+        //     cur->left = evalution(cur->left, e);
+        //     if (bulid_in_func.find(cur->left->token.value) == bulid_in_func.end()) {
+        //         e = undefined_function;
+        //         throw Error(undefined_function, cur->left->token.value, cur->left->token.value ,0, 0, cur->left);
+        //     }
+        //     return evalution(cur, e); // Return the right child of the dot node
+        // }
+        // else if (cur->left->token.type == QUOTE) {
+        //     // cerr << "\033[1;33m" << "QUOTE: " << cur->right->token.value << "\033[0m" << endl;
+        //     // cerr << "\033[1;33m" << "QUOTE: " << cur->right->token.value << "\033[0m" << endl;
+
+        //     return cur->right->left; // Return the quoted expression as is
+        // }
+        // else {
+
+        // }
 
         
         return nullptr;
