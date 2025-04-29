@@ -166,20 +166,11 @@ public:
         else if (t == cleaned)
             message = "environment cleaned";
         
-        
     }
     Node_Token * get_sub_error_tree() {
         return root;
     }
 };
-
-
-struct variable {
-    string name;
-    TokenType type;
-};
-
-
 
 void clear_pointer_gather() {
     for (auto it = pointer_gather.begin(); it != pointer_gather.end(); ) {
@@ -209,7 +200,7 @@ class FunctionExecutor {
     }
     
     bool is_reserved_word(string str) {
-        if (func.find(str) != func.end())
+        if (bulid_in_func.find(str) != bulid_in_func.end())
             return true;
         
         return false;
@@ -312,33 +303,6 @@ class FunctionExecutor {
                         if (e == no_return_value) {
                             e = unbound_parameter;
                             throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, parameter);
-                        }
-                        else if (e == unbound_symbol) {
-                            if (func.find(err.expected) != func.end()) {
-                                Node_Token* node = new Node_Token();
-                                pointer_gather.insert(node);
-
-                                node->token.type = SYMBOL;
-                                node->token.value = err.expected;
-                                node->token.is_function = true;
-                                
-                                arg_list.push_back(node);
-                                
-                            }
-                            else
-                                throw err;
-                        }
-                        else if (e == defined || e == error_level_define || e == error_define_format) {
-                            e = error_level_define;
-                            throw Error(error_level_define, instr, "DEFINE", 0, 0);
-                        }
-                        else if(e == cleaned) {
-                            e = error_level_cleaned;
-                            throw Error(error_level_cleaned, instr, "CLEAN-ENVIRONMENT", 0, 0);
-                        }
-                        else if(e == UNEXPECTED_EXIT) {
-                            e = error_level_exit;
-                            throw Error(error_level_exit, instr, "EXIT", 0, 0);
                         }
                         else
                             throw err;
@@ -486,8 +450,6 @@ class FunctionExecutor {
             }
 
             if (parameter->token.type != DOT) {
-                // if (func.find(parameter->token.value) != func.end())
-                //     return parameter;
                 e = incorrect_argument_type;
                 throw Error(incorrect_argument_type, instr, parameter->token.value, 0, 0, parameter);
             }
@@ -516,9 +478,6 @@ class FunctionExecutor {
             }
 
             if (is_ATOM(parameter->token.type)) {
-                // if (func.find(parameter->token.value) != func.end())
-                //     return parameter;
-
                 e = incorrect_argument_type;
                 throw Error(incorrect_argument_type, instr, parameter->token.value, 0, 0, parameter);
             }
@@ -1232,7 +1191,7 @@ class FunctionExecutor {
         else {
             func.clear();
             defined_table.clear();
-            // clear_pointer_gather();
+            clear_pointer_gather();
             e = cleaned;
             throw Error(cleaned, "environment cleaned", "lalala", 0, 0);
         }
@@ -1402,7 +1361,7 @@ class FunctionExecutor {
 
             else if (func_name == "clean-environment")
                 return clean_environment(cur, cur->right, e);
-            else if (func_Token->token.type == QUOTE) // func_name == "quote"
+            else if (func_name == "quote" || func_Token->token.type == QUOTE) // 
                 return quote_func(cur, cur->right, e);
             else if (func_name == "exit")
                 return exit_func(cur, cur->right, e);
@@ -1419,11 +1378,19 @@ class FunctionExecutor {
             Node_Token* t = evalution(func_Token, e);
 
             // check whether the evaluated result (of ( 。。。 )) is an internal function
-            if (bulid_in_func.find(t->token.value) != bulid_in_func.end()) {
+            if (func.find(t->token.value) != func.end()) {
                 Node_Token* node = new Node_Token();
                 node->token.type = DOT;
                 node->token.value = ".";
                 node->left =t;
+                node->right = cur->right;
+                return evalution(node, e);
+            }
+            else if (defined_table.find(t->token.value) != defined_table.end()) {
+                Node_Token* node = new Node_Token();
+                node->token.type = DOT;
+                node->token.value = ".";
+                node->left = defined_table[t->token.value];
                 node->right = cur->right;
                 return evalution(node, e);
             }
@@ -2660,22 +2627,9 @@ public:
                 tmpstr = Get_Str(c_peek, tmptoken, error); // get the string from cin
                 if (tmpstr == "t")
                     tmptoken.value = "#t";
-
-                // if (defined_table.find(tmpstr) != defined_table.end()) {
-                //     // cerr << "\033[1;32m" << "1. defined_table: " << tmpstr << "\033[0m" << endl;
-                //     tmptoken.value = defined_table[tmpstr]->token.value;
-                //     // cerr << "\033[1;32m" << "2. defined_table: " << tmpstr << "\033[0m" << endl;
-                // }
-                
-                // if ( func.find(tmpstr) != func.end() ){
-                //     cerr << "\033[1;32m" << "func: " << tmpstr << "\033[0m" << endl;
-                    // tmptoken.is_function = true;
-                // }
-
                 tokenBuffer.push_back(tmptoken);
                 // cerr << "\033[1;32m" << "tmpstr: " << tmpstr << "\033[0m" << endl;
-                
-                
+
                 // no error, judge the syntax
                 if (error == Error_None)
                     syntax.check_syntax(tokenBuffer, error);
@@ -2721,9 +2675,6 @@ public:
                             finish_input = true;
                             break; 
                         }
-                        // else {
-                        //     break;
-                        // }
                     }
                 }
                 else if (leftParen == rightParen)
@@ -2851,14 +2802,9 @@ int main() {
 
                 cerr << "\033[1;34mend execute\033[0m" << endl;
 
-
                 Syntax.print(result);
 
-                // Syntax.pretty_print(Lexical.tokenBuffer);
-
-                // reset lexical vector
-                // Lexical.tokenBuffer.clear();
-                Lexical.reset();
+                Lexical.reset(); // reset lexical vector
             }
 
         } catch (Error e) {
@@ -2906,12 +2852,6 @@ int main() {
                     Syntax.print(e.get_sub_error_tree());
                     Lexical.reset();
                     break;
-                // case incorrect_argument_type_list:
-                //     cerr << "\033[1;31m" << "incorrect_argument_type_list" << "\033[0m" << endl;
-                //     cout << e.message;
-                //     Syntax.print(e.get_sub_error_tree());
-                //     Lexical.reset();
-                //     break;
                 case undefined_function:
                     cerr << "\033[1;31m" << "undefined_function" << "\033[0m" << endl;
                     cout << e.message;
@@ -2987,12 +2927,6 @@ int main() {
                     func = bulid_in_func;
                     Lexical.reset();
                     break;
-                
-                // case procedure:
-                //     cerr << "\033[1;31m" << "procedure" << "\033[0m" << endl;
-                //     cout << e.message << endl;
-                //     Lexical.reset();
-                //     break;
                 
                 default:
                     break;
