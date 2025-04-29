@@ -144,7 +144,7 @@ public:
         else if (t == incorrect_argument_type)
             message = "ERROR (" + e_token + " with incorrect argument type) : "; // Node_Token* r
         else if (t == undefined_function)
-            message = "ERROR (attempt to apply non-function) : " + e_token;
+            message = "ERROR (attempt to apply non-function) : "; // Node_Token* r
         else if (t == unbound_symbol) 
             message = "ERROR (unbound symbol) : " + e_token;
         else if (t == unbound_parameter)
@@ -391,7 +391,9 @@ class FunctionExecutor {
             node->token.type = DOT;
             node->token.value = ".";
             node->left = arg_list.at(0);
+            cerr << "\033[1;35m" << "arg_list.at(0): " << arg_list.at(0)->token.value << "\033[0m" << endl;
             node->right = arg_list.at(1);
+            cerr << "\033[1;35m" << "arg_list.at(1): " << arg_list.at(1)->token.value << "\033[0m" << endl;
         }
 
         return node;
@@ -469,10 +471,8 @@ class FunctionExecutor {
             throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
         else {
             Node_Token *parameter = args->left;
-            Node_Token *evaluated = nullptr;
-
             try {
-                parameter = evalution(parameter, e);
+                parameter = evalution(args->left, e);
             }
             catch (Error err) {
                 if (e == no_return_value) {
@@ -484,8 +484,8 @@ class FunctionExecutor {
             }
 
             if (parameter->token.type != DOT) {
-                if (func.find(parameter->token.value) != func.end())
-                    return parameter;
+                // if (func.find(parameter->token.value) != func.end())
+                //     return parameter;
                 e = incorrect_argument_type;
                 throw Error(incorrect_argument_type, instr, parameter->token.value, 0, 0, parameter);
             }
@@ -501,10 +501,8 @@ class FunctionExecutor {
             throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
         else {
             Node_Token *parameter = args->left;
-            Node_Token *evaluated = nullptr;
-
             try {
-                parameter = evalution(parameter, e);
+                parameter = evalution(args->left, e);
             }
             catch (Error err) {
                 if (e == no_return_value) {
@@ -515,9 +513,9 @@ class FunctionExecutor {
                     throw err;
             }
 
-            if (parameter->token.type != DOT) {
-                if (func.find(parameter->token.value) != func.end())
-                    return parameter;
+            if (is_ATOM(parameter->token.type)) {
+                // if (func.find(parameter->token.value) != func.end())
+                //     return parameter;
 
                 e = incorrect_argument_type;
                 throw Error(incorrect_argument_type, instr, parameter->token.value, 0, 0, parameter);
@@ -1281,7 +1279,7 @@ class FunctionExecutor {
                 else {
                     cerr << "\033[1;35m" << "---- judge failed ----\ncur->token.value:" << cur->token.value << "\033[0m" << endl;
                     e = unbound_symbol;
-                    throw Error(unbound_symbol, cur->token.value, "unbound symbol", cur->token.line, cur->token.column);
+                    throw Error(unbound_symbol, cur->token.value, "unbound symbol", cur->token.line, cur->token.column, cur);
                 }
             }
             return cur; // Return the atom itself
@@ -1305,13 +1303,14 @@ class FunctionExecutor {
         Node_Token* func_Token = cur->left;
         func_name = func_Token->token.value;
         if (defined_table.find(func_Token->token.value) != defined_table.end())
-            func_name = defined_table[func_Token->token.value]->token.value;
+            func_name = defined_table[func_Token->token.value]->token.value; // "Best"
 
         if ( is_ATOM(func_Token->token.type) ) {
-            if (func_Token->token.type != SYMBOL) {
+            if (func_Token->token.type != SYMBOL ) { // || bulid_in_func.find(func_name) == bulid_in_func.end()
                 e = undefined_function;
-                throw Error(undefined_function, func_Token->token.value, func_Token->token.value ,func_Token->token.line, func_Token->token.column);
+                throw Error(undefined_function, func_Token->token.value, func_Token->token.value ,func_Token->token.line, func_Token->token.column, func_Token);
             }
+            
             else if (func_name == "define")
                 return define_func("define", cur, cur->right, e);
             else if (func_name == "cons")
@@ -1401,11 +1400,16 @@ class FunctionExecutor {
                 return quote_func(cur, cur->right, e);
             else if (func_name == "exit")
                 return exit_func(cur, cur->right, e);
+
+            // else if (bulid_in_func.find(func_name) == bulid_in_func.end()) {
+            //     e = undefined_function;
+            //     throw Error(undefined_function, func_Token->token.value, func_Token->token.value ,func_Token->token.line, func_Token->token.column, func_Token);
+            // }
             else { // undefined function
                 // cout << "-------- undefined function --------\n";
-                if (func.find(func_name) == func.end()) {
+                if (bulid_in_func.find(func_name) == bulid_in_func.end()) {
                     e = unbound_symbol;
-                    throw Error(unbound_symbol, func_name, func_name ,func_Token->token.line, func_Token->token.column);
+                    throw Error(unbound_symbol, func_name, func_name ,func_Token->token.line, func_Token->token.column, cur);
                 }
 
             }
@@ -1415,6 +1419,10 @@ class FunctionExecutor {
             cerr << "------ DOT ---------" << endl;
             cerr << "\033[1;33m" << "DOT: " << cur->left->left->token.value << "\033[0m" << endl;
             cur->left = evalution(cur->left, e);
+            if (bulid_in_func.find(cur->left->token.value) == bulid_in_func.end()) {
+                e = undefined_function;
+                throw Error(undefined_function, cur->left->token.value, cur->left->token.value ,0, 0, cur->left);
+            }
             return evalution(cur, e); // Return the right child of the dot node
         }
         else if (cur->left->token.type == QUOTE) {
@@ -2882,7 +2890,8 @@ int main() {
                 //     break;
                 case undefined_function:
                     cerr << "\033[1;31m" << "undefined_function" << "\033[0m" << endl;
-                    cout << e.message << endl;
+                    cout << e.message;
+                    Syntax.print(e.get_sub_error_tree());
                     Lexical.reset();
                     break;
                 case unbound_symbol:
