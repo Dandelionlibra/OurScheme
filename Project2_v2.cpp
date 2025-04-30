@@ -1275,6 +1275,11 @@ class FunctionExecutor {
             cerr << "\033[1;35m" << "is_ATOM(func_Token->token.type): " << func_Token->token.value << "\033[0m" << endl;
             // if (func_Token->token.type != SYMBOL ) { // || bulid_in_func.find(func_name) == bulid_in_func.end()
             // }
+            if (defined_table.find(func_name) != defined_table.end()) { // check whether the first argument is a function
+                cerr << "\033[1;35m" << "is function: " << func_name << "\033[0m" << endl;
+                func_name = defined_table[func_name]->token.value;
+            }
+            
             
             if (func_name == "define")
                 return define_func("define", cur, cur->right, e);
@@ -1379,6 +1384,7 @@ class FunctionExecutor {
 
             // check whether the evaluated result (of ( 。。。 )) is an internal function
             if (func.find(t->token.value) != func.end()) {
+                cerr << "\033[1;34m" << "func.find(t->token.value) != func.end(): " << "\033[0m" << endl;
                 Node_Token* node = new Node_Token();
                 node->token.type = DOT;
                 node->token.value = ".";
@@ -1387,6 +1393,7 @@ class FunctionExecutor {
                 return evalution(node, e);
             }
             else if (defined_table.find(t->token.value) != defined_table.end()) {
+                cerr << "\033[1;34m" << "defined_table.find(t->token.value) != defined_table.end(): " << "\033[0m" << endl;
                 Node_Token* node = new Node_Token();
                 node->token.type = DOT;
                 node->token.value = ".";
