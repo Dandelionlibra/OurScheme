@@ -313,6 +313,10 @@ class FunctionExecutor {
                     defined_table[arg_list.at(0)->token.value] = arg_list.at(1);
                     cerr << "\033[1;35m" << "arg_list.at(0): " << arg_list.at(0)->token.value << "\033[0m" << endl;
                     cerr << "\033[1;35m" << "arg_list.at(1): " << arg_list.at(1)->token.value << "\033[0m" << endl;
+                    // if (defined_table.find(arg_list.at(1)->token.value) != defined_table.end()) {
+                    //     func.insert(arg_list.at(0)->token.value);
+                    // }
+                    
                     e = defined;
                     throw Error(defined, arg_list.at(0)->token.value, "defined la la", 0, 0, cur);
                 
@@ -1231,8 +1235,14 @@ class FunctionExecutor {
         if (is_ATOM(cur->token.type)) { //  != DOT &&  != QUOTE
             if (cur->token.type == SYMBOL) {
                 cerr << "\033[1;35m" << "---- judge define or not ----\ncur->token.value:" << cur->token.value << "\033[0m" << endl;
-                if (defined_table.find(cur->token.value) != defined_table.end())
+                if (defined_table.find(cur->token.value) != defined_table.end()) {
+                    // if (bulid_in_func.find(defined_table[cur->token.value]->token.value) != bulid_in_func.end()) {
+                    //     cur->token.is_function = true;
+                    //     return cur; // Return the bound symbol
+                    // }
+                    
                     return defined_table[cur->token.value]; // Return the bound symbol
+                }
                 else if (func.find(cur->token.value) != func.end()){
                     cur->token.is_function = true;
                     return cur;
@@ -1278,6 +1288,18 @@ class FunctionExecutor {
             if (defined_table.find(func_name) != defined_table.end()) { // check whether the first argument is a function
                 cerr << "\033[1;35m" << "is function: " << func_name << "\033[0m" << endl;
                 func_name = defined_table[func_name]->token.value;
+                if (func.find(func_name) != func.end())
+                    func_Token->token.is_function = true;
+                else {
+                    Node_Token* tmp = new Node_Token();
+                    pointer_gather.insert(tmp);
+                    tmp->token.value = func_name;
+                    tmp->token.type = SYMBOL;
+                    tmp->left = func_Token->left;
+                    tmp->right = func_Token->right;
+                    e = undefined_function;
+                    throw Error(undefined_function, func_name, func_name ,func_Token->token.line, func_Token->token.column, tmp);
+                }
             }
             
             
@@ -1381,6 +1403,10 @@ class FunctionExecutor {
         else { // the first argument of ( ... ) is ( 。。。 ), i.e., it is ( ( 。。。 ) ...... )
             // evaluate ( 。。。 )
             Node_Token* t = evalution(func_Token, e);
+            // if (!t->token.is_function) {
+            //     e = undefined_function;
+            //     throw Error(undefined_function, func_Token->token.value, func_Token->token.value ,func_Token->token.line, func_Token->token.column, func_Token);
+            // }
 
             // check whether the evaluated result (of ( 。。。 )) is an internal function
             if (func.find(t->token.value) != func.end()) {
@@ -1407,29 +1433,6 @@ class FunctionExecutor {
             }
 
         }
-
-
-
-        // else if (cur->left->token.type == DOT) {
-        //     cerr << "------ DOT ---------" << endl;
-        //     cerr << "\033[1;33m" << "DOT: " << cur->left->left->token.value << "\033[0m" << endl;
-        //     cur->left = evalution(cur->left, e);
-        //     if (bulid_in_func.find(cur->left->token.value) == bulid_in_func.end()) {
-        //         e = undefined_function;
-        //         throw Error(undefined_function, cur->left->token.value, cur->left->token.value ,0, 0, cur->left);
-        //     }
-        //     return evalution(cur, e); // Return the right child of the dot node
-        // }
-        // else if (cur->left->token.type == QUOTE) {
-        //     // cerr << "\033[1;33m" << "QUOTE: " << cur->right->token.value << "\033[0m" << endl;
-        //     // cerr << "\033[1;33m" << "QUOTE: " << cur->right->token.value << "\033[0m" << endl;
-
-        //     return cur->right->left; // Return the quoted expression as is
-        // }
-        // else {
-
-        // }
-
         
         return nullptr;
     }
