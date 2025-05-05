@@ -1287,11 +1287,6 @@ class FunctionExecutor {
             if (cur->token.type == SYMBOL) {
                 // cerr << "\033[1;35m" << "---- judge define or not ----\ncur->token.value:" << cur->token.value << "\033[0m" << endl;
                 if (defined_table.find(cur->token.value) != defined_table.end()) {
-                    // if (bulid_in_func.find(defined_table[cur->token.value]->token.value) != bulid_in_func.end()) {
-                    //     cur->token.is_function = true;
-                    //     return cur; // Return the bound symbol
-                    // }
-                    
                     return defined_table[cur->token.value]; // Return the bound symbol
                 }
                 else if (func.find(cur->token.value) != func.end()){
@@ -1454,10 +1449,41 @@ class FunctionExecutor {
         else { // the first argument of ( ... ) is ( 。。。 ), i.e., it is ( ( 。。。 ) ...... )
             // evaluate ( 。。。 )
             Node_Token* t = evalution(func_Token, e);
-            // if (!t->token.is_function) {
-            //     e = undefined_function;
-            //     throw Error(undefined_function, func_Token->token.value, func_Token->token.value ,func_Token->token.line, func_Token->token.column, func_Token);
-            // }
+            // 若為 lambda function, 則
+            //                  * <- t.token
+            //                /   \
+            //           lambda    *
+            //                  /    \
+            //          tmp -> *      *
+            //               / \    /   \
+            //            arg1 *  body1  *
+            //                / \      /   \
+            //              arg2 nil  body2 nil
+
+            // count args
+            int arg_count = 0;
+            Node_Token *tmp = t->right->left;
+            while (tmp != nullptr && tmp->token.type != NIL) {
+                arg_count++;
+                tmp = tmp->right;
+            }
+
+            // count actual args
+            int actual_count = 0;
+            tmp = cur->right;
+            while (tmp != nullptr && tmp->token.type != NIL) {
+                actual_count++;
+                tmp = tmp->right;
+            }
+
+            if (arg_count != actual_count) {
+                e = incorrect_number_of_arguments;
+                throw Error(incorrect_number_of_arguments, func_name, "incorrect_number_of_arguments", 0, 0, cur);
+            }
+
+
+            
+            
 
             // check whether the evaluated result (of ( 。。。 )) is an internal function
             if (func.find(t->token.value) != func.end()) {
@@ -1479,6 +1505,10 @@ class FunctionExecutor {
                 return evalution(node, e);
             }
             else {
+                // lambda ?????
+                if (t->token.type == DOT) {
+
+                }
                 e = undefined_function;
                 throw Error(undefined_function, t->token.value, t->token.value ,0, 0, t);
             }
