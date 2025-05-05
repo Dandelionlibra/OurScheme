@@ -432,6 +432,9 @@ class FunctionExecutor {
 
         return node;
     }
+    Node_Token* execute_lambda( Node_Token *expression, Node_Token *args, errorType &e) {
+
+    }
     // ! (list '(4 5))
     Node_Token* list_func(string instr, Node_Token *cur, Node_Token *args, errorType &e) {
         Node_Token* node = new Node_Token();
@@ -1449,40 +1452,45 @@ class FunctionExecutor {
         else { // the first argument of ( ... ) is ( 。。。 ), i.e., it is ( ( 。。。 ) ...... )
             // evaluate ( 。。。 )
             Node_Token* t = evalution(func_Token, e);
-            // 若為 lambda function, 則
-            //                  * <- t.token
-            //                /   \
-            //           lambda    *
-            //                  /    \
-            //          tmp -> *      *
-            //               / \    /   \
-            //            arg1 *  body1  *
-            //                / \      /   \
-            //              arg2 nil  body2 nil
 
-            // count args
-            int arg_count = 0;
-            Node_Token *tmp = t->right->left;
-            while (tmp != nullptr && tmp->token.type != NIL) {
-                arg_count++;
-                tmp = tmp->right;
+            // ! *********************************************************************
+            if (t->left->token.value == "lambda") {
+                // 若為 lambda function, 則
+                //                  * <- t.token
+                //                /   \
+                //           lambda    *
+                //                  /    \
+                //          tmp -> *      *
+                //               / \    /   \
+                //            arg1 *  body1  *
+                //                / \      /   \
+                //              arg2 nil  body2 nil
+                // count args
+                int arg_count = 0;
+                Node_Token *tmp = t->right->left;
+                while (tmp != nullptr && tmp->token.type != NIL) {
+                    arg_count++;
+                    tmp = tmp->right;
+                }
+
+                // count actual args
+                int actual_count = 0;
+                tmp = cur->right;
+                while (tmp != nullptr && tmp->token.type != NIL) {
+                    actual_count++;
+                    tmp = tmp->right;
+                }
+
+                if (arg_count != actual_count) {
+                    e = error_define_format;
+                    throw Error(error_define_format, "LAMBDA", "error_define_format", 0, 0, cur);
+                }
+
+                execute_lambda(t->right, cur->right, e); // execute lambda function
             }
-
-            // count actual args
-            int actual_count = 0;
-            tmp = cur->right;
-            while (tmp != nullptr && tmp->token.type != NIL) {
-                actual_count++;
-                tmp = tmp->right;
-            }
-
-            if (arg_count != actual_count) {
-                e = incorrect_number_of_arguments;
-                throw Error(incorrect_number_of_arguments, func_name, "incorrect_number_of_arguments", 0, 0, cur);
-            }
+            // ! *********************************************************************
 
 
-            
             
 
             // check whether the evaluated result (of ( 。。。 )) is an internal function
