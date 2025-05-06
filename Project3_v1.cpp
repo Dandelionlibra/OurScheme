@@ -426,13 +426,26 @@ class FunctionExecutor {
             }
             */
 
+        
 
 
         }
 
         return node;
     }
-    Node_Token* execute_lambda( Node_Token *expression, Node_Token *args, errorType &e) {
+    Node_Token* execute_lambda( Node_Token *defined_args, Node_Token *lambda, errorType &e) {
+        unordered_map<string, Node_Token*> local_defined_table;
+        // *defined local variable
+        Node_Token* param = lambda->left;
+        while (param->token.type != NIL && param != nullptr) {
+            local_defined_table[defined_args->token.value] = param->left;
+            param = param->right;
+            defined_args = defined_args->right;
+        }
+
+        Node_Token* expression = lambda->right;
+
+        return sequence(expression, e);
 
     }
     // ! (list '(4 5))
@@ -1458,9 +1471,9 @@ class FunctionExecutor {
                 // 若為 lambda function, 則
                 //                  * <- t.token
                 //                /   \
-                //           lambda    *
+                //           lambda    * <- t->right
                 //                  /    \
-                //          tmp -> *      *
+                //          tmp -> *      * 
                 //               / \    /   \
                 //            arg1 *  body1  *
                 //                / \      /   \
@@ -1486,7 +1499,8 @@ class FunctionExecutor {
                     throw Error(error_define_format, "LAMBDA", "error_define_format", 0, 0, cur);
                 }
 
-                execute_lambda(t->right, cur->right, e); // execute lambda function
+                // local_arg, lambda, error
+                execute_lambda(cur->right, t->right, e); // execute lambda function
             }
             // ! *********************************************************************
 
