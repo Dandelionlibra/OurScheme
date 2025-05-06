@@ -241,11 +241,11 @@ class FunctionExecutor {
 
         return is_equ(arg1->left, arg2->left) && is_equ(arg1->right, arg2->right);
     }
-    Node_Token* sequence(Node_Token *cur, errorType &e) {
+    Node_Token* sequence(Node_Token *cur, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
         Node_Token* node = nullptr;
         while (cur != nullptr && cur->token.type != NIL) {
             try {
-                node = evalution(cur->left, e);
+                node = evalution(cur->left, e, local_defined_table);
             }
             catch (Error err) {
                 if (e == no_return_value) {
@@ -260,7 +260,7 @@ class FunctionExecutor {
         return node;
     }
     public:
-    Node_Token* define_func(string instr, Node_Token *cur, Node_Token *args, errorType &e) {
+    Node_Token* define_func(string instr, Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
         vector<Node_Token*> arg_list;
         if (cur->parent != nullptr){
             e = error_level_define;
@@ -290,7 +290,7 @@ class FunctionExecutor {
                     else if (parameter->token.type == DOT) {
                         // proj 3
                         cerr << "\033[1;33m ----------- proj 3 ----------- \033[0m" << endl;
-                        arg_list.push_back(evalution(parameter, e));
+                        arg_list.push_back(evalution(parameter, e, local_defined_table));
                         cerr << "\033[1;33m" + arg_list.back()->token.value + "\033[0m" << endl;
 
                     }
@@ -305,7 +305,7 @@ class FunctionExecutor {
                 }
                 else {
                     try {
-                        arg_list.push_back(evalution(parameter, e));
+                        arg_list.push_back(evalution(parameter, e, local_defined_table));
                     }
                     catch (Error err) {
                         // cerr << "\033[1;35m" << "error: " << error << "\033[0m" << endl;
@@ -339,7 +339,7 @@ class FunctionExecutor {
         return nullptr;
     }
 
-    Node_Token* cons(string instr, Node_Token *cur, Node_Token *args, errorType &e) {
+    Node_Token* cons(string instr, Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
         Node_Token* node = new Node_Token();
         pointer_gather.insert(node);
         vector<Node_Token*> arg_list;
@@ -352,7 +352,7 @@ class FunctionExecutor {
                 Node_Token *parameter = t->left;
                 // cerr << "\033[1;35m" << "parameter: " << parameter->token.value << "\033[0m" << endl;
                 try {
-                    arg_list.push_back(evalution(parameter, e));
+                    arg_list.push_back(evalution(parameter, e, local_defined_table));
                 }
                 catch (Error err) {
                     // cerr << "\033[1;35m" << "error: " << error << "\033[0m" << endl;
@@ -377,7 +377,7 @@ class FunctionExecutor {
 
         return node;
     }
-    Node_Token* lambda(Node_Token *cur, Node_Token *args, errorType &e) {
+    Node_Token* lambda(Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
         Node_Token* node = new Node_Token();
         pointer_gather.insert(node);
         vector<Node_Token*> arg_list;
@@ -396,7 +396,7 @@ class FunctionExecutor {
             while (left_node != nullptr && left_node->token.type != NIL) {
                 if (left_node->left->token.type != SYMBOL) {
                     if (left_node->left->token.type == DOT)
-                        left_node->left = evalution(left_node->left, e);
+                        left_node->left = evalution(left_node->left, e, local_defined_table);
                     else {
                         e = error_define_format;
                         throw Error(error_define_format, "LAMBDA", "error_define_format", 0, 0, cur);
@@ -416,7 +416,7 @@ class FunctionExecutor {
             while (right_node != nullptr && right_node->token.type != NIL) {
                 if (right_node->left->token.type != SYMBOL) {
                     if (right_node->left->token.type == DOT)
-                    right_node->left = evalution(right_node->left, e);
+                    right_node->left = evalution(right_node->left, e, local_defined_table);
                     else {
                         e = error_define_format;
                         throw Error(error_define_format, "LAMBDA", "error_define_format", 0, 0, cur);
@@ -433,23 +433,25 @@ class FunctionExecutor {
 
         return node;
     }
-    Node_Token* execute_lambda( Node_Token *defined_args, Node_Token *lambda, errorType &e) {
-        unordered_map<string, Node_Token*> local_defined_table;
+    Node_Token* execute_lambda( Node_Token *defined_args, Node_Token *lambda, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
+        unordered_map<string, Node_Token*> tmp_defined_table = defined_table;
+        Node_Token* node;
         // *defined local variable
         Node_Token* param = lambda->left;
         while (param->token.type != NIL && param != nullptr) {
-            local_defined_table[defined_args->token.value] = param->left;
+            defined_table[defined_args->token.value] = param->left;
             param = param->right;
             defined_args = defined_args->right;
         }
 
         Node_Token* expression = lambda->right;
 
-        return sequence(expression, e);
-
+        node = sequence(expression, e, local_defined_table);
+        defined_table = tmp_defined_table; // restore the defined table
+        return node;
     }
     // ! (list '(4 5))
-    Node_Token* list_func(string instr, Node_Token *cur, Node_Token *args, errorType &e) {
+    Node_Token* list_func(string instr, Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
         Node_Token* node = new Node_Token();
         pointer_gather.insert(node);
         node->token.type = DOT;
@@ -470,7 +472,7 @@ class FunctionExecutor {
                 Node_Token* evaluated = nullptr;
 
                 try {
-                    evaluated = evalution(parameter, e);
+                    evaluated = evalution(parameter, e, local_defined_table);
                 }
                 catch (Error err) {
                     if (e == no_return_value) {
@@ -503,13 +505,13 @@ class FunctionExecutor {
             return head;
         }
     }
-    Node_Token* car(string instr, Node_Token *cur, Node_Token *args, errorType &e) {
+    Node_Token* car(string instr, Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
         if (count_args(args) != 1)
             throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
         else {
             Node_Token *parameter = args->left;
             try {
-                parameter = evalution(args->left, e);
+                parameter = evalution(args->left, e, local_defined_table);
             }
             catch (Error err) {
                 if (e == no_return_value) {
@@ -531,13 +533,13 @@ class FunctionExecutor {
 
         // return nullptr;
     }
-    Node_Token* cdr(string instr, Node_Token *cur, Node_Token *args, errorType &e) {
+    Node_Token* cdr(string instr, Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
         if (count_args(args) != 1)
             throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
         else {
             Node_Token *parameter = args->left;
             try {
-                parameter = evalution(args->left, e);
+                parameter = evalution(args->left, e, local_defined_table);
             }
             catch (Error err) {
                 if (e == no_return_value) {
@@ -558,7 +560,7 @@ class FunctionExecutor {
         }
     }
     
-    Node_Token* judge_elements(string instr, Node_Token *cur, Node_Token *args, errorType &e) {
+    Node_Token* judge_elements(string instr, Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
         Node_Token* node = new Node_Token();
         pointer_gather.insert(node);
         node->token.value = "#f";
@@ -571,7 +573,7 @@ class FunctionExecutor {
             if (args != nullptr && args->token.type != NIL) {
                 Node_Token *parameter = args->left;
                 try {
-                    parameter = evalution(args->left, e);
+                    parameter = evalution(args->left, e, local_defined_table);
                 }
                 catch (Error err) {
                     // cerr << "\033[1;35m" << "error: " << error << "\033[0m" << endl;
@@ -653,7 +655,7 @@ class FunctionExecutor {
     
     // (/ + - -)
     // > ERROR (/ with incorrect argument type) : #<procedure +>
-    Node_Token* implement_arithmetic(string instr, Node_Token *cur, Node_Token *args, errorType &e) {
+    Node_Token* implement_arithmetic(string instr, Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
         Node_Token* node = new Node_Token();
         pointer_gather.insert(node);
         vector<Node_Token*> arg_list;
@@ -667,7 +669,7 @@ class FunctionExecutor {
                 Node_Token *parameter = t->left;
                 // cerr << "\033[1;35m" << "parameter: " << parameter->token.value << "\033[0m" << endl;
                 try {
-                    arg_list.push_back(evalution(parameter, e));
+                    arg_list.push_back(evalution(parameter, e, local_defined_table));
                 }
                 catch (Error err) {
                     // cerr << "\033[1;35m" << "error: " << error << "\033[0m" << endl;
@@ -741,7 +743,7 @@ class FunctionExecutor {
         return node;
     }
 
-    Node_Token* implement_logical(string instr, Node_Token *cur, Node_Token *args, errorType &e) {
+    Node_Token* implement_logical(string instr, Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
         Node_Token* node = new Node_Token();
         pointer_gather.insert(node);
         vector<Node_Token*> arg_list;
@@ -757,7 +759,7 @@ class FunctionExecutor {
             while (t != nullptr && t->token.type != NIL) {
                 Node_Token *parameter = t->left;
                 try {
-                    arg_list.push_back(evalution(parameter, e));
+                    arg_list.push_back(evalution(parameter, e, local_defined_table));
                     if (instr == "not") {
                         if (arg_list.back()->token.type != NIL) {
                             node->token.value = "#f";
@@ -801,7 +803,7 @@ class FunctionExecutor {
         return node;
     }
 
-    Node_Token* compare_func(string instr, Node_Token *cur, Node_Token *args, errorType &e) {
+    Node_Token* compare_func(string instr, Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
         Node_Token* node = new Node_Token();
         pointer_gather.insert(node);
         vector<Node_Token*> arg_list;
@@ -817,7 +819,7 @@ class FunctionExecutor {
                 Node_Token *parameter = t->left;
                 // cerr << "\033[1;35m" << "parameter: " << parameter->token.value << "\033[0m" << endl;
                 try {
-                    arg_list.push_back(evalution(parameter, e));
+                    arg_list.push_back(evalution(parameter, e, local_defined_table));
                 }
                 catch (Error err) {
                     // cerr << "\033[1;35m" << "error: " << error << "\033[0m" << endl;
@@ -925,7 +927,7 @@ class FunctionExecutor {
 
         return node;
     }
-    Node_Token* str_operator(string instr, Node_Token *cur, Node_Token *args, errorType &e) {
+    Node_Token* str_operator(string instr, Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
         Node_Token* node = new Node_Token();
         pointer_gather.insert(node);
         vector<Node_Token*> arg_list;
@@ -940,7 +942,7 @@ class FunctionExecutor {
                 Node_Token *parameter = t->left;
                 // cerr << "\033[1;35m" << "parameter: " << parameter->token.value << "\033[0m" << endl;
                 try {
-                    arg_list.push_back(evalution(parameter, e));
+                    arg_list.push_back(evalution(parameter, e, local_defined_table));
                     if (arg_list.back()->token.type != STRING) {
                         e = incorrect_argument_type;
                         throw Error(incorrect_argument_type, instr, arg_list.back()->token.value, 0, 0, arg_list.back());
@@ -1027,7 +1029,7 @@ class FunctionExecutor {
         return node;
     }
 
-    Node_Token* eqv(string instr, Node_Token *cur, Node_Token *args, errorType &e) {
+    Node_Token* eqv(string instr, Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
         Node_Token* node = new Node_Token();
         pointer_gather.insert(node);
         vector<Node_Token*> arg_list;
@@ -1041,7 +1043,7 @@ class FunctionExecutor {
             while (t != nullptr && t->token.type != NIL) {
                 Node_Token *parameter = t->left;
                 try {
-                    arg_list.push_back(evalution(parameter, e));
+                    arg_list.push_back(evalution(parameter, e, local_defined_table));
                 }
                 catch (Error err) {
                     // cerr << "\033[1;35m" << "error: " << error << "\033[0m" << endl;
@@ -1063,7 +1065,7 @@ class FunctionExecutor {
 
         return node;
     }
-    Node_Token* equal(string instr, Node_Token *cur, Node_Token *args, errorType &e) {
+    Node_Token* equal(string instr, Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
         Node_Token* node = new Node_Token();
         pointer_gather.insert(node);
         vector<Node_Token*> arg_list;
@@ -1077,7 +1079,7 @@ class FunctionExecutor {
             while (t != nullptr && t->token.type != NIL) {
                 Node_Token *parameter = t->left;
                 try {
-                    arg_list.push_back(evalution(parameter, e));
+                    arg_list.push_back(evalution(parameter, e, local_defined_table));
                 }
                 catch (Error err) {
                     if (e == no_return_value) {
@@ -1098,7 +1100,7 @@ class FunctionExecutor {
 
         return node;
     }
-    Node_Token* begin_func(string instr, Node_Token *cur, Node_Token *args, errorType &e) {
+    Node_Token* begin_func(string instr, Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
         Node_Token* node;
         vector<Node_Token*> arg_list;
 
@@ -1109,7 +1111,7 @@ class FunctionExecutor {
             while (t != nullptr && t->token.type != NIL) {
                 Node_Token *parameter = t->left;
                 try {
-                    arg_list.push_back(evalution(parameter, e));
+                    arg_list.push_back(evalution(parameter, e, local_defined_table));
                 }
                 catch (Error err) {
                     if (e == no_return_value) {
@@ -1128,7 +1130,7 @@ class FunctionExecutor {
         return node;
     }
 
-    Node_Token* if_func(string instr, Node_Token *cur, Node_Token *args, errorType &e) {
+    Node_Token* if_func(string instr, Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
         vector<Node_Token*> arg_list;
 
         int c = count_args(args);
@@ -1140,7 +1142,7 @@ class FunctionExecutor {
             while (t != nullptr && t->token.type != NIL) {
                 Node_Token *parameter = t->left;
                 try {
-                    arg_list.push_back(evalution(parameter, e));
+                    arg_list.push_back(evalution(parameter, e, local_defined_table));
                 }
                 catch (Error err) {
                     if (err.type == no_return_value) {
@@ -1175,7 +1177,7 @@ class FunctionExecutor {
 
         return nullptr;
     }
-    Node_Token* cond_func(string instr, Node_Token *cur, Node_Token *args, errorType &e) {
+    Node_Token* cond_func(string instr, Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
         Node_Token* node = new Node_Token();
         pointer_gather.insert(node);
 
@@ -1211,31 +1213,31 @@ class FunctionExecutor {
                     
                     Node_Token* tmp = parameter->left;
                     if (parameter->left->token.type == DOT)
-                        tmp = evalution(parameter->left, e); // 這邊要 evalution 參數的左邊，設 tmp 為了避免改到原本的樹
+                        tmp = evalution(parameter->left, e, local_defined_table); // 這邊要 evalution 參數的左邊，設 tmp 為了避免改到原本的樹
                         // parameter->left = evalution(parameter->left, e);
                         
                     if (tmp->token.type == SYMBOL && tmp->token.value == "else")
-                        return sequence(parameter->right, e); // 直接 return right 的執行結果
+                        return sequence(parameter->right, e, local_defined_table); // 直接 return right 的執行結果
                     else {// 非 else
-                        Node_Token* success = evalution(tmp, e);
+                        Node_Token* success = evalution(tmp, e, local_defined_table);
                         cerr << "\033[1;31m" << "success: " << success->token.value << "\033[0m" << endl;
                         cerr << "\033[1;31m" << "success: " << success->token.type << "\033[0m" << endl;
                         if (success->token.type != NIL)
-                            return sequence(parameter->right, e);
+                            return sequence(parameter->right, e, local_defined_table);
 
                     }
                 }
                 // 非最後的 argument
                 else {
                     // 可執行
-                    Node_Token* success = evalution(parameter->left, e);
+                    Node_Token* success = evalution(parameter->left, e, local_defined_table);
                     if (success->token.type != NIL) {
                         cerr << "\033[1;31m" << "success: " << success->token.value << "\033[0m" << endl;
-                        return sequence(parameter->right, e); // 直接 return right 的執行結果
+                        return sequence(parameter->right, e, local_defined_table); // 直接 return right 的執行結果
                     }
                 }
                 
-                // arg_list.push_back(evalution(parameter, e));
+                // arg_list.push_back(evalution(parameter, e, local_defined_table));
             }
             catch (Error err) {
                 // cerr << "\033[1;35m" << "error: " << error << "\033[0m" << endl;
@@ -1252,7 +1254,7 @@ class FunctionExecutor {
         
         throw Error(no_return_value, instr, "no_return_value", 0, 0, cur);
     }
-    Node_Token* clean_environment(Node_Token *cur, Node_Token *args, errorType &e) {
+    Node_Token* clean_environment(Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
         if (cur->parent != nullptr){
             e = error_level_cleaned;
             throw Error(error_level_cleaned, "CLEAN-ENVIRONMENT", "CLEAN-ENVIRONMENT", 0, 0);
@@ -1269,14 +1271,14 @@ class FunctionExecutor {
         return nullptr;
     }
 
-    Node_Token* quote_func(Node_Token *cur, Node_Token *args, errorType &e) {
+    Node_Token* quote_func(Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
         if (count_args(args) != 1)
             throw Error(incorrect_number_of_arguments, "quote", "incorrect_number_of_arguments", 0, 0);
         else 
             return args->left; // Directly return the quoted expression as is
         
     }
-    Node_Token* exit_func(Node_Token *cur, Node_Token *args, errorType &e) {
+    Node_Token* exit_func(Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
         if (cur->parent != nullptr){
             e = error_level_exit;
             throw Error(error_level_exit, "EXIT", "EXIT", 0, 0);
@@ -1291,7 +1293,7 @@ class FunctionExecutor {
         return nullptr;
     }
 
-    Node_Token* evalution(Node_Token *cur, errorType &e) {
+    Node_Token* evalution(Node_Token *cur, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
         cerr << "-------- enter evalution --------" <<endl;
         if (cur == nullptr) return nullptr;
 
@@ -1366,94 +1368,94 @@ class FunctionExecutor {
             
             
             if (func_name == "define")
-                return define_func("define", cur, cur->right, e);
+                return define_func("define", cur, cur->right, e, local_defined_table);
             else if (func_name == "cons")
-                return cons("cons", cur, cur->right, e);
+                return cons("cons", cur, cur->right, e, local_defined_table);
             else if (func_name == "lambda")
-                return lambda(cur, cur->right, e);
+                return lambda(cur, cur->right, e, local_defined_table);
             
             else if (func_name == "list")
-                return list_func("list", cur, cur->right, e);
+                return list_func("list", cur, cur->right, e, local_defined_table);
             else if (func_name == "car")
-                return car("car", cur, cur->right, e);
+                return car("car", cur, cur->right, e, local_defined_table);
             else if (func_name == "cdr")
-                return cdr("cdr", cur, cur->right, e);
+                return cdr("cdr", cur, cur->right, e, local_defined_table);
 
             else if (func_name == "atom?")
-                return judge_elements("atom?", cur, cur->right, e);
+                return judge_elements("atom?", cur, cur->right, e, local_defined_table);
             else if (func_name == "pair?")
-                return judge_elements("pair?", cur, cur->right, e);
+                return judge_elements("pair?", cur, cur->right, e, local_defined_table);
             else if (func_name == "list?")
-                return judge_elements("list?", cur, cur->right, e);
+                return judge_elements("list?", cur, cur->right, e, local_defined_table);
             else if (func_name == "null?")
-                return judge_elements("null?", cur, cur->right, e);
+                return judge_elements("null?", cur, cur->right, e, local_defined_table);
             else if (func_name == "integer?")
-                return judge_elements("integer?", cur, cur->right, e);
+                return judge_elements("integer?", cur, cur->right, e, local_defined_table);
             else if (func_name == "real?")
-                return judge_elements("real?", cur, cur->right, e);
+                return judge_elements("real?", cur, cur->right, e, local_defined_table);
             else if (func_name == "number?")
-                return judge_elements("number?", cur, cur->right, e);
+                return judge_elements("number?", cur, cur->right, e, local_defined_table);
             else if (func_name == "string?")
-                return judge_elements("string?", cur, cur->right, e);
+                return judge_elements("string?", cur, cur->right, e, local_defined_table);
             else if (func_name == "boolean?")
-                return judge_elements("boolean?", cur, cur->right, e);
+                return judge_elements("boolean?", cur, cur->right, e, local_defined_table);
             else if (func_name == "symbol?")
-                return judge_elements("symbol?", cur, cur->right, e);
+                return judge_elements("symbol?", cur, cur->right, e, local_defined_table);
 
             else if (func_name == "+")
-                return implement_arithmetic("+", cur, cur->right, e);
+                return implement_arithmetic("+", cur, cur->right, e, local_defined_table);
             else if (func_name == "-")
-                return implement_arithmetic("-", cur, cur->right, e);
+                return implement_arithmetic("-", cur, cur->right, e, local_defined_table);
             else if (func_name == "*")
-                return implement_arithmetic("*", cur, cur->right, e);
+                return implement_arithmetic("*", cur, cur->right, e, local_defined_table);
             else if (func_name == "/")
-                return implement_arithmetic("/", cur, cur->right, e);
+                return implement_arithmetic("/", cur, cur->right, e, local_defined_table);
 
             else if (func_name == "not")
-                return implement_logical("not", cur, cur->right, e);
+                return implement_logical("not", cur, cur->right, e, local_defined_table);
             else if (func_name == "and")
-                return implement_logical("and", cur, cur->right, e);
+                return implement_logical("and", cur, cur->right, e, local_defined_table);
             else if (func_name == "or")
-                return implement_logical("or", cur, cur->right, e);
+                return implement_logical("or", cur, cur->right, e, local_defined_table);
 
             else if (func_name == "=")
-                return compare_func("=", cur, cur->right, e);
+                return compare_func("=", cur, cur->right, e, local_defined_table);
             else if (func_name == "<")
-                return compare_func("<", cur, cur->right, e);
+                return compare_func("<", cur, cur->right, e, local_defined_table);
             else if (func_name == ">")
-                return compare_func(">", cur, cur->right, e);
+                return compare_func(">", cur, cur->right, e, local_defined_table);
             else if (func_name == "<=")
-                return compare_func("<=", cur, cur->right, e);
+                return compare_func("<=", cur, cur->right, e, local_defined_table);
             else if (func_name == ">=")
-                return compare_func(">=", cur, cur->right, e);
+                return compare_func(">=", cur, cur->right, e, local_defined_table);
 
             else if (func_name == "string-append")
-                return str_operator("string-append", cur, cur->right, e);
+                return str_operator("string-append", cur, cur->right, e, local_defined_table);
             else if (func_name == "string>?")
-                return str_operator("string>?", cur, cur->right, e);
+                return str_operator("string>?", cur, cur->right, e, local_defined_table);
             else if (func_name == "string<?")
-                return str_operator("string<?", cur, cur->right, e);
+                return str_operator("string<?", cur, cur->right, e, local_defined_table);
             else if (func_name == "string=?")
-                return str_operator("string=?", cur, cur->right, e);
+                return str_operator("string=?", cur, cur->right, e, local_defined_table);
 
             else if (func_name == "eqv?")
-                return eqv("eqv?", cur, cur->right, e);
+                return eqv("eqv?", cur, cur->right, e, local_defined_table);
             else if (func_name == "equal?")
-                return equal("equal?", cur, cur->right, e);
+                return equal("equal?", cur, cur->right, e, local_defined_table);
             else if (func_name == "begin")
-                return begin_func("begin", cur, cur->right, e);
+                return begin_func("begin", cur, cur->right, e, local_defined_table);
 
             else if (func_name == "if")
-                return if_func("if", cur, cur->right, e);
+                return if_func("if", cur, cur->right, e, local_defined_table);
             else if (func_name == "cond")
-                return cond_func("COND", cur, cur->right, e);
+                return cond_func("COND", cur, cur->right, e, local_defined_table);
 
             else if (func_name == "clean-environment")
-                return clean_environment(cur, cur->right, e);
+                return clean_environment(cur, cur->right, e, local_defined_table);
             else if (func_name == "quote" || func_Token->token.type == QUOTE) // 
-                return quote_func(cur, cur->right, e);
+                return quote_func(cur, cur->right, e, local_defined_table);
             else if (func_name == "exit")
-                return exit_func(cur, cur->right, e);
+                return exit_func(cur, cur->right, e, local_defined_table);
             else { // undefined function
                 cerr << "-------- undefined function --------\n";
                 
@@ -1464,7 +1466,7 @@ class FunctionExecutor {
         }
         else { // the first argument of ( ... ) is ( 。。。 ), i.e., it is ( ( 。。。 ) ...... )
             // evaluate ( 。。。 )
-            Node_Token* t = evalution(func_Token, e);
+            Node_Token* t = evalution(func_Token, e, local_defined_table);
 
             // ! *********************************************************************
             if (t->left->token.value == "lambda") {
@@ -1500,7 +1502,7 @@ class FunctionExecutor {
                 }
 
                 // local_arg, lambda, error
-                execute_lambda(cur->right, t->right, e); // execute lambda function
+                execute_lambda(cur->right, t->right, e, local_defined_table); // execute lambda function
             }
             // ! *********************************************************************
 
@@ -1515,7 +1517,7 @@ class FunctionExecutor {
                 node->token.value = ".";
                 node->left =t;
                 node->right = cur->right;
-                return evalution(node, e);
+                return evalution(node, e, local_defined_table);
             }
             else if (defined_table.find(t->token.value) != defined_table.end()) {
                 // cerr << "\033[1;34m" << "defined_table.find(t->token.value) != defined_table.end(): " << "\033[0m" << endl;
@@ -1524,7 +1526,7 @@ class FunctionExecutor {
                 node->token.value = ".";
                 node->left = defined_table[t->token.value];
                 node->right = cur->right;
-                return evalution(node, e);
+                return evalution(node, e, local_defined_table);
             }
             else {
                 // lambda ?????
@@ -2908,7 +2910,8 @@ int main() {
                 cerr << "\033[1;34menter execute\033[0m" << endl;
                 FunctionExecutor func_executor;
                 // Node_Token* result = nullptr;
-                Node_Token* result = func_executor.evalution(Syntax.get_root(), E);
+                unordered_map<string, Node_Token*> local_defined_table;
+                Node_Token* result = func_executor.evalution(Syntax.get_root(), E, local_defined_table);
 
                 cerr << "\033[1;34mend execute\033[0m" << endl;
 
