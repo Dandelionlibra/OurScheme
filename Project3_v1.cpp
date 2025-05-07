@@ -425,21 +425,39 @@ class FunctionExecutor {
 
         return node;
     }
-    Node_Token* execute_lambda( Node_Token *defined_args, Node_Token *lambda, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
+    Node_Token* execute_lambda( Node_Token *lambda, Node_Token *defined_args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
+        cerr << "\033[1;33m" << "--------- enter execute_lambda ---------" << "\033[0m" << endl;
         unordered_map<string, Node_Token*> tmp_defined_table = defined_table;
+
         Node_Token* node;
         // *defined local variable
-        Node_Token* param = lambda->left;
-        while (param->token.type != NIL && param != nullptr) {
-            defined_table[defined_args->token.value] = param->left;
-            param = param->right;
+        Node_Token* lambda_args = lambda->left;
+        while (lambda_args->token.type != NIL && lambda_args != nullptr && defined_args->token.type != NIL && defined_args != nullptr) {
+            cerr << "\033[1;35m" << "lambda_args: " << lambda_args->left->token.value << "\033[0m" << endl;
+            cerr << "\033[1;35m" << "defined_args: " << defined_args->token.value << "\033[0m" << endl;
+            if (defined_args->left->token.type == SYMBOL) {
+                if (defined_table.find(defined_args->left->token.value) == defined_table.end()) {
+                    e = unbound_symbol;
+                    throw Error(unbound_symbol, defined_args->left->token.value, "unbound symbol", 0, 0, defined_args->left);
+                }
+                else if (bulid_in_func.find(defined_args->left->token.value) != bulid_in_func.end()) {
+                    defined_args->left->token.is_function = true;
+                }
+            }
+            local_defined_table[lambda_args->left->token.value] = defined_args->left;
+            lambda_args = lambda_args->right;
             defined_args = defined_args->right;
         }
 
-        Node_Token* expression = lambda->right;
+        if ((lambda_args->token.type == NIL && defined_args->token.type != NIL) || (lambda_args == nullptr && defined_args != nullptr)) {
+            e = incorrect_number_of_arguments;
+            throw Error(incorrect_number_of_arguments, lambda->token.value, "incorrect_number_of_arguments", 0, 0, lambda);
+        }
 
-        node = sequence(expression, e, local_defined_table);
-        defined_table = tmp_defined_table; // restore the defined table
+        // Node_Token* expression = lambda->right;
+
+        node = sequence(lambda->right, e, local_defined_table);
+        // defined_table = tmp_defined_table;
         return node;
     }
     // ! (list '(4 5))
@@ -1462,7 +1480,23 @@ class FunctionExecutor {
         else { // the first argument of ( ... ) is ( 。。。 ), i.e., it is ( ( 。。。 ) ...... )
             // evaluate ( 。。。 )
             Node_Token* t = evalution(func_Token, e, local_defined_table);
-
+            cerr << "\033[1;33m" << "--------- judge enter execute_lambda ---------" << "\033[0m" << endl;
+            // if (t != nullptr) {
+            //     cerr << "\033[1;33m" << "t->token.value: " << t->token.value << "\033[0m" << endl;
+            //     cerr << "\033[1;33m" << "t->left->token.type: " << t->left->token.type << "\033[0m" << endl;
+            // }
+            if (t != nullptr && t->token.value == "lambda") {
+                cerr << "\033[1;33m" << "--------- enter execute_lambda ---------" << "\033[0m" << endl;
+                // 若為 lambda function, 則
+                //                  lambda <- t.token
+                //                  /    \
+                //          tmp -> *      * 
+                //               / \    /   \
+                //            arg1 *  body1  *
+                //                / \      /   \
+                //              arg2 nil  body2 nil
+                return execute_lambda(t, cur->right, e, local_defined_table); // execute lambda function
+            }
             
 
             // check whether the evaluated result (of ( 。。。 )) is an internal function
