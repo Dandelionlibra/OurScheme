@@ -72,9 +72,9 @@ struct Token {
     int line;
     int column;
     int level;
-    bool is_function = false;
+    bool is_function;
 
-    Token() : type(SYMBOL), value(""), line(0), column(0), level(0) {}
+    Token() : type(SYMBOL), value(""), line(0), column(0), level(0), is_function(false) {}
 };
 
 struct Node_Token {
@@ -100,8 +100,8 @@ set<string> bulid_in_func = { // only bulid-in function
     "clean-environment",
     "quote", "exit"
 };
-set <string> func; // all function name, unclude self-defined function
-unordered_map<string, Node_Token*> defined_table; // store the variable name and value
+// set <string> func; // all function name, unclude self-defined function
+unordered_map<string, Node_Token*> defined_table; // store the variable name, value and defined func
 set <Node_Token*> pointer_gather; // store the variable name and value
 
 
@@ -266,16 +266,10 @@ class FunctionExecutor {
             e = error_level_define;
             throw Error(error_level_define, instr, "DEFINE", 0, 0);
         }
-        else if (count_args(args) < 2) {
+        else if (count_args(args) != 2) {
             e = error_define_format;
             throw Error(error_define_format, "DEFINE", "error_define_format", 0, 0, cur);
         }
-
-        // 
-
-
-
-        
         else {
             Node_Token *t = args;
             // ! while (t != nullptr && t->token.type != NIL)
@@ -289,10 +283,8 @@ class FunctionExecutor {
                     }
                     else if (parameter->token.type == DOT) {
                         // proj 3
-                        cerr << "\033[1;33m ----------- proj 3 ----------- \033[0m" << endl;
-                        arg_list.push_back(evalution(parameter, e, local_defined_table));
-                        cerr << "\033[1;33m" + arg_list.back()->token.value + "\033[0m" << endl;
-
+                        e = error_define_format;
+                        throw Error(error_define_format, "DEFINE", "error_define_format", 0, 0, cur);
                     }
                     else if (parameter->token.type == SYMBOL) {
                         // none reserved word
@@ -1262,7 +1254,7 @@ class FunctionExecutor {
         else if (count_args(args) != 0)
             throw Error(incorrect_number_of_arguments, "clean-environment", "incorrect_number_of_arguments", 0, 0);
         else {
-            func.clear();
+            // func.clear();
             defined_table.clear();
             clear_pointer_gather();
             e = cleaned;
@@ -1304,12 +1296,11 @@ class FunctionExecutor {
         if (is_ATOM(cur->token.type)) { //  != DOT &&  != QUOTE
             if (cur->token.type == SYMBOL) {
                 // cerr << "\033[1;35m" << "---- judge define or not ----\ncur->token.value:" << cur->token.value << "\033[0m" << endl;
-                if (defined_table.find(cur->token.value) != defined_table.end()) {
-                    return defined_table[cur->token.value]; // Return the bound symbol
+                if (local_defined_table.find(cur->token.value) != local_defined_table.end()) {
+                    return local_defined_table[cur->token.value]; // Return the local bound symbol
                 }
-                else if (func.find(cur->token.value) != func.end()){
-                    cur->token.is_function = true;
-                    return cur;
+                else if (defined_table.find(cur->token.value) != defined_table.end()) {
+                    return defined_table[cur->token.value]; // Return the bound symbol
                 }
                 else {
                     // cerr << "\033[1;35m" << "---- judge failed ----\ncur->token.value:" << cur->token.value << "\033[0m" << endl;
@@ -1346,23 +1337,27 @@ class FunctionExecutor {
             throw Error(undefined_function, func_Token->token.value, func_Token->token.value ,func_Token->token.line, func_Token->token.column, func_Token);
         }
         else if (func_Token->token.type == SYMBOL || func_Token->token.type == QUOTE) {
-            // cerr << "\033[1;35m" << "is_ATOM(func_Token->token.type): " << func_Token->token.value << "\033[0m" << endl;
+            cerr << "\033[1;35m" << "is_ATOM(func_Token->token.type): " << func_Token->token.value << "\033[0m" << endl;
             // if (func_Token->token.type != SYMBOL ) { // || bulid_in_func.find(func_name) == bulid_in_func.end()
             // }
             if (defined_table.find(func_name) != defined_table.end()) { // check whether the first argument is a function
-                // cerr << "\033[1;35m" << "is function: " << func_name << "\033[0m" << endl;
-                func_name = defined_table[func_name]->token.value;
-                if (func.find(func_name) != func.end())
-                    func_Token->token.is_function = true;
-                else {
-                    Node_Token* tmp = new Node_Token();
-                    pointer_gather.insert(tmp);
-                    tmp->token.value = func_name;
-                    tmp->token.type = SYMBOL;
-                    tmp->left = func_Token->left;
-                    tmp->right = func_Token->right;
+                cerr << "\033[1;35m" << "is function: " << func_name << "\033[0m" << endl;
+                Node_Token* tmp;
+                if (defined_table.find(func_name) != defined_table.end()) {
+                    tmp = defined_table[func_name]; // get the function token
+                    func_name = defined_table[func_name]->token.value;
+                    cerr << "\033[1;35m" << "is function: " << func_name << "\033[0m" << endl;
+                    cerr << "\033[1;35m" << "exec: " << func_Token->token.is_function << "\033[0m" << endl;
+                    
+                }
+                
+                // not an executable function
+                if (!tmp->token.is_function) {
+                    func_Token->token.value = func_name; // copy the function token
+                    // tmp->left = func_Token->left;
+                    // tmp->right = func_Token->right;
                     e = undefined_function;
-                    throw Error(undefined_function, func_name, func_name ,func_Token->token.line, func_Token->token.column, tmp);
+                    throw Error(undefined_function, func_name, func_name ,func_Token->token.line, func_Token->token.column, func_Token);
                 }
             }
             
@@ -1468,49 +1463,10 @@ class FunctionExecutor {
             // evaluate ( 。。。 )
             Node_Token* t = evalution(func_Token, e, local_defined_table);
 
-            // ! *********************************************************************
-            if (t->left->token.value == "lambda") {
-                // 若為 lambda function, 則
-                //                  * <- t.token
-                //                /   \
-                //           lambda    * <- t->right
-                //                  /    \
-                //          tmp -> *      * 
-                //               / \    /   \
-                //            arg1 *  body1  *
-                //                / \      /   \
-                //              arg2 nil  body2 nil
-                // count args
-                int arg_count = 0;
-                Node_Token *tmp = t->right->left;
-                while (tmp != nullptr && tmp->token.type != NIL) {
-                    arg_count++;
-                    tmp = tmp->right;
-                }
-
-                // count actual args
-                int actual_count = 0;
-                tmp = cur->right;
-                while (tmp != nullptr && tmp->token.type != NIL) {
-                    actual_count++;
-                    tmp = tmp->right;
-                }
-
-                if (arg_count != actual_count) {
-                    e = error_define_format;
-                    throw Error(error_define_format, "LAMBDA", "error_define_format", 0, 0, cur);
-                }
-
-                // local_arg, lambda, error
-                execute_lambda(cur->right, t->right, e, local_defined_table); // execute lambda function
-            }
-            // ! *********************************************************************
-
-
             
 
             // check whether the evaluated result (of ( 。。。 )) is an internal function
-            if (func.find(t->token.value) != func.end()) {
+            if (local_defined_table.find(t->token.value) != local_defined_table.end()) {
                 // cerr << "\033[1;34m" << "func.find(t->token.value) != func.end(): " << "\033[0m" << endl;
                 Node_Token* node = new Node_Token();
                 node->token.type = DOT;
@@ -1530,9 +1486,6 @@ class FunctionExecutor {
             }
             else {
                 // lambda ?????
-                if (t->token.type == DOT) {
-
-                }
                 e = undefined_function;
                 throw Error(undefined_function, t->token.value, t->token.value ,0, 0, t);
             }
@@ -2739,6 +2692,7 @@ public:
                 tmpstr = Get_Str(c_peek, tmptoken, error); // get the string from cin
                 if (tmpstr == "t")
                     tmptoken.value = "#t";
+                tmptoken.is_function = false; // ! reset is_function flag
                 tokenBuffer.push_back(tmptoken);
                 // cerr << "\033[1;32m" << "tmpstr: " << tmpstr << "\033[0m" << endl;
 
@@ -2871,10 +2825,23 @@ public:
     }
 };
 
+void push_bulid_in_func_in_defined_table() {
+    for (const auto& func_name : bulid_in_func) {
+        if (defined_table.find(func_name) == defined_table.end()) { // Check if the function is not already defined
+            Node_Token* func_node = new Node_Token();
+            pointer_gather.insert(func_node);
+            func_node->token.type = SYMBOL;
+            func_node->token.value = func_name;
+            func_node->token.is_function = true;
+            defined_table[func_name] = func_node;
+        }
+    }
+}
+
 
 int main() {
-    func = bulid_in_func;
-    // test("a", "3", INT);
+    // func = bulid_in_func;
+    push_bulid_in_func_in_defined_table(); // push bulid_in_func to defined_table
     LexicalAnalyzer Lexical; //詞法分析器
     bool is_Syntax_legal = true;
     SyntaxAnalyzer Syntax; //語法分析器
@@ -3037,7 +3004,8 @@ int main() {
                 case cleaned:
                     cerr << "\033[1;31m" << "cleaned" << "\033[0m" << endl;
                     cout << e.message << endl;
-                    func = bulid_in_func;
+                    // func = bulid_in_func;
+                    push_bulid_in_func_in_defined_table();
                     Lexical.reset();
                     break;
                 
