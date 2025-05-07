@@ -262,15 +262,19 @@ class FunctionExecutor {
     public:
     Node_Token* define_func(string instr, Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
         vector<Node_Token*> arg_list;
+        int c = count_args(args);
         if (cur->parent != nullptr){
             e = error_level_define;
             throw Error(error_level_define, instr, "DEFINE", 0, 0);
         }
-        else if (count_args(args) != 2) {
+        else if (c < 2) {
             e = error_define_format;
             throw Error(error_define_format, "DEFINE", "error_define_format", 0, 0, cur);
         }
         else {
+            if (c > 2 || args->left->token.type == DOT)
+                return define_func_more(instr, cur, args, e, local_defined_table);
+
             Node_Token *t = args;
             // ! while (t != nullptr && t->token.type != NIL)
             for (int i = 0 ; i < 2 ; i++) {
@@ -328,6 +332,22 @@ class FunctionExecutor {
             
             
         }
+        return nullptr;
+    }
+
+    Node_Token* define_func_more(string instr, Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
+        vector<Node_Token*> arg_list;
+        int c = count_args(args);
+        //                  * <- cur
+        //                /   \
+        //             define  .
+        //                   /   \
+        //                 .       .
+        //                / \     / \
+        //               a  nil expr1 .
+        //                           / \
+        //                       expr2  nil
+
         return nullptr;
     }
 
@@ -402,24 +422,6 @@ class FunctionExecutor {
                 
                 left_node = left_node->right;
             }
-
-            /*
-            Node_Token* right_node = node->right;
-            while (right_node != nullptr && right_node->token.type != NIL) {
-                if (right_node->left->token.type != SYMBOL) {
-                    if (right_node->left->token.type == DOT)
-                    right_node->left = evalution(right_node->left, e, local_defined_table);
-                    else {
-                        e = error_define_format;
-                        throw Error(error_define_format, "LAMBDA", "error_define_format", 0, 0, cur);
-                    }
-                }
-                left_node = left_node->right;
-            }
-            */
-
-        
-
 
         }
 
