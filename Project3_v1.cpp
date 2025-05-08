@@ -448,6 +448,10 @@ class FunctionExecutor {
         return node;
     }
     Node_Token* lambda(Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
+        
+        // if () {
+        //     return execute_lambda(cur, args, e, local_defined_table);
+        // }
         Node_Token* node = new Node_Token();
         pointer_gather.insert(node);
         
@@ -457,6 +461,7 @@ class FunctionExecutor {
 
         if (count_args(args) < 2) { // 兩個以上參數
             e = error_define_format;
+            // cur->left->token.is_function = false;
             throw Error(error_define_format, "LAMBDA", "error_define_format", 0, 0, cur);
         }
         else {
@@ -485,7 +490,7 @@ class FunctionExecutor {
 
         return node;
     }
-    Node_Token* execute_lambda( Node_Token *lambda, Node_Token *defined_args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
+    Node_Token* execute_lambda(Node_Token *lambda, Node_Token *defined_args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
         cerr << "\033[1;33m" << "--------- enter execute_lambda ---------" << "\033[0m" << endl;
         Node_Token* node;
         vector<Node_Token*> arg_list;
@@ -516,6 +521,77 @@ class FunctionExecutor {
 
 
         return sequence(lambda->right, e, new_table);
+    }
+    
+    Node_Token* let(string instr, Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
+        cerr << "\033[1;33m" << "--------- enter let ---------" << "\033[0m" << endl;
+        Node_Token* node;
+        // pointer_gather.insert(node);
+        // vector<Node_Token*> arg_list;
+        unordered_map<string, Node_Token*> new_table = local_defined_table;
+        
+        
+        if (count_args(args) < 2) { // 兩個以上參數
+            cerr << "\033[1;35m" << "error: 1. error_define_format\033[0m" << endl;
+            e = error_define_format;
+            // cur->left->token.is_function = false;
+            throw Error(error_define_format, "Let", "error_define_format", 0, 0, cur);
+        }
+        
+        Node_Token* first_arg = args->left;
+        if (first_arg->token.type != DOT) { // 第一個參數必須是 expression
+            e = error_define_format;
+            throw Error(error_define_format, "Let", "error_define_format", 0, 0, cur);
+        }
+        else {
+            // Node_Token* parameter = first_arg;
+            while (first_arg != nullptr && first_arg->token.type != NIL) {
+                Node_Token* arg = first_arg->left;
+                if (arg->left->token.type != SYMBOL) {
+                    e = error_define_format;
+                    throw Error(error_define_format, "Let", "error_define_format", 0, 0, cur);
+                }
+                // else
+                if (is_reserved_word(arg->left->token.value)) {
+                    e = error_define_format;
+                    throw Error(error_define_format, "Let", "error_define_format", 0, 0, cur);
+                }
+                
+                try {
+                    // store the variable name and value
+                    new_table[arg->left->token.value] = evalution(arg->right->left, e, local_defined_table);
+                }
+                catch (Error err) {
+                    cerr << "\033[1;31m" << "******* 1. let error *******" << "\033[0m" << endl;
+                    throw err;
+                }
+                
+                first_arg = first_arg->right;
+            }
+
+            Node_Token* other_arg = args->right;
+            while (other_arg != nullptr && other_arg->token.type != NIL) {
+                Node_Token* arg = other_arg->left;
+                try {
+                    node = evalution(arg, e, new_table);
+                }
+                catch (Error err) {
+                    cerr << "\033[1;31m" << "******* 2. let error *******" << "\033[0m" << endl;
+                    if (e == no_return_value) {
+                        if (other_arg->right == nullptr || other_arg->right->token.type == NIL)
+                            throw err; // If it's the last s-exp
+                        else e = Error_None; // otherwise, ignore the error
+                    }
+                    else
+                        throw err;
+                }
+
+                other_arg = other_arg->right;
+            }
+
+        }
+
+        return node;
     }
     // ! (list '(4 5))
     Node_Token* list_func(string instr, Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
@@ -1436,7 +1512,7 @@ class FunctionExecutor {
                 }
                 else {
                     cerr << "\033[1;33m" << "********* set the function token to be executable *********"  << endl;
-                    func_Token->token.is_function = true; // set the function token to be executable
+                    // func_Token->token.is_function = true; // set the function token to be executable
                 }
             }
             
@@ -1447,6 +1523,8 @@ class FunctionExecutor {
                 return cons("cons", cur, cur->right, e, local_defined_table);
             else if (func_name == "lambda")
                 return lambda(cur, cur->right, e, local_defined_table);
+            else if (func_name == "let")
+                return let("let", cur, cur->right, e, local_defined_table);
             
             else if (func_name == "list")
                 return list_func("list", cur, cur->right, e, local_defined_table);
