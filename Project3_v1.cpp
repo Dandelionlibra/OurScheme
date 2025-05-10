@@ -49,6 +49,7 @@ enum errorType {
     undefined_function = 555,
     unbound_symbol = 666,
     unbound_parameter = 667,
+    unbound_condition = 678,
     no_return_value = 668,
     unbound_test_condition = 669,
     division_by_zero = 0,
@@ -154,6 +155,8 @@ public:
             message = "ERROR (no return value) : "; // Node_Token* r
         else if (t == unbound_test_condition)
             message = "ERROR (unbound-test condition) : "; // Node_Token* r
+        else if (t == unbound_condition)
+            message = "ERROR (unbound condition) : "; // Node_Token* r
         else if (t == division_by_zero)
             message = "ERROR (division by zero) : " + e_token;
         else if (t == non_list)
@@ -414,7 +417,18 @@ class FunctionExecutor {
         cerr << "\033[1;32m" << " *** test1 *** "  << "\033[0m" << endl;
         while (args->token.type != NIL && args != nullptr) {
             cerr << "\033[1;35m" << "lambda_args: " << args->left->token.value << "\033[0m" << endl;
-            arg_list.push_back(evalution(args->left, e, local_defined_table));
+            try {
+                arg_list.push_back(evalution(args->left, e, local_defined_table));
+            }
+            catch (Error err) {
+                // cerr << "\033[1;35m" << "error: " << error << "\033[0m" << endl;
+                if (e == no_return_value) {
+                    e = unbound_parameter;
+                    throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, args->left);
+                }
+                else
+                    throw err;
+            }
             args = args->right;
         }
 
@@ -1017,8 +1031,8 @@ class FunctionExecutor {
                 }
                 catch (Error err) {
                     if (e == no_return_value) {
-                        e = unbound_parameter; // unbound condition
-                        throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, parameter);
+                        e = unbound_condition; // unbound condition
+                        throw Error(unbound_condition, instr, "unbound condition", 0, 0, parameter);
                     }
                     else
                         throw err;
@@ -3116,7 +3130,7 @@ public:
   
         if (finish_input) {
             cerr << "\033[1;32mfinish_input\033[0m" << endl;
-            print_vector(tokenBuffer);
+            // print_vector(tokenBuffer);
 
             while (true) {
                 c_peek = cin.peek();
@@ -3315,6 +3329,12 @@ int main() {
                     break;
                 case unbound_test_condition:
                     cerr << "\033[1;31m" << "unbound_test_condition" << "\033[0m" << endl;
+                    cout << e.message;
+                    Syntax.print(e.get_sub_error_tree());
+                    Lexical.reset();
+                    break;
+                case unbound_condition:
+                    cerr << "\033[1;31m" << "unbound_condition" << "\033[0m" << endl;
                     cout << e.message;
                     Syntax.print(e.get_sub_error_tree());
                     Lexical.reset();
