@@ -98,7 +98,7 @@ set<string> bulid_in_func = { // only bulid-in function
     "string-append", "string>?", "string<?", "string=?",
     "begin", "if", "cond",
     "clean-environment",
-    "quote", "exit"
+    "'", "quote", "exit"
 };
 // set <string> func; // all function name, unclude self-defined function
 unordered_map<string, Node_Token*> defined_table; // store the variable name, value and defined func
@@ -204,6 +204,7 @@ class FunctionExecutor {
         if (bulid_in_func.find(str) != bulid_in_func.end())
             return true;
         
+        
         return false;
     }
     bool is_equ_address(Node_Token *arg1, Node_Token *arg2) {
@@ -267,20 +268,18 @@ class FunctionExecutor {
             e = error_level_define;
             throw Error(error_level_define, instr, "DEFINE", 0, 0);
         }
+        else if (c < 2) {
+            e = error_define_format;
+            throw Error(error_define_format, "DEFINE", "error_define_format", 0, 0, cur);
+        }
         else if (c > 2 || args->left->token.type == DOT) {
-            if (args->left->token.type == DOT)  // (define (a) b c)
+            if (args->left->token.type == DOT && args->left->left->token.type != QUOTE)  // (define (a) b c)
                 return define_func_more(instr, cur, args, e, local_defined_table);
             // (define a (b) (c))
             e = error_define_format;
             throw Error(error_define_format, "DEFINE", "error_define_format", 0, 0, cur);
         }
-        else if (c < 2) {
-            cerr << "\033[1;35m" << "error: 1. error_define_format\033[0m" << endl;
-            e = error_define_format;
-            throw Error(error_define_format, "DEFINE", "error_define_format", 0, 0, cur);
-        }
         else {
-            cerr << "\033[1;35m" << "error: 2. error_define_format\033[0m" << endl;
 
             Node_Token *t = args;
             // ! while (t != nullptr && t->token.type != NIL)
@@ -288,22 +287,20 @@ class FunctionExecutor {
                 Node_Token *parameter = t->left;
                 
                 if (i == 0) {
-                    if (parameter->token.type != SYMBOL && parameter->token.type != DOT) {
-                        e = error_define_format;
-                        throw Error(error_define_format, "DEFINE", "error_define_format", 0, 0, cur);
-                    }
-                    else if (parameter->token.type == DOT) {
-                        // proj 3
-                        e = error_define_format;
-                        throw Error(error_define_format, "DEFINE", "error_define_format", 0, 0, cur);
-                    }
-                    else if (parameter->token.type == SYMBOL) {
+                    cerr << "1.     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1"<<endl;
+                    if (parameter->token.type == SYMBOL) {
                         // none reserved word
                         if (is_reserved_word(parameter->token.value)) {
                             e = error_define_format;
                             throw Error(error_define_format, "DEFINE", "error_define_format", 0, 0, cur);
                         }
                         arg_list.push_back(parameter);
+                    }
+                    else if (is_ATOM(parameter->token.type) || parameter->token.type == DOT) {
+                        cerr << "2.     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1"<<endl;
+
+                        e = error_define_format;
+                        throw Error(error_define_format, "DEFINE", "error_define_format", 0, 0, cur);
                     }
                 }
                 else {
@@ -323,12 +320,6 @@ class FunctionExecutor {
 
                 if (i == 1) {
                     defined_table[arg_list.at(0)->token.value] = arg_list.at(1);
-                    // cerr << "\033[1;35m" << "arg_list.at(0): " << arg_list.at(0)->token.value << "\033[0m" << endl;
-                    // cerr << "\033[1;35m" << "arg_list.at(1): " << arg_list.at(1)->token.value << "\033[0m" << endl;
-                    // if (defined_table.find(arg_list.at(1)->token.value) != defined_table.end()) {
-                    //     func.insert(arg_list.at(0)->token.value);
-                    // }
-                    
                     e = defined;
                     throw Error(defined, arg_list.at(0)->token.value, "defined la la", 0, 0, cur);
                 
@@ -359,6 +350,22 @@ class FunctionExecutor {
         pointer_gather.insert(func);
         func->token.value = args->left->left->token.value; // function name
         func->token.type = args->left->left->token.type; // function name
+        cerr << "func->token.value: " << func->token.value << endl;
+        cerr << "func->token.type: " << func->token.type << endl;
+
+        if (func->token.type == SYMBOL) {
+            cerr << "func->token.type == SYMBOL" << endl;
+            if (is_reserved_word(func->token.value)) {
+                cerr << "func->token.type == SYMBOL && is_reserved_word(func->token.value)" << endl;
+                e = error_define_format;
+                throw Error(error_define_format, "DEFINE", "error_define_format", 0, 0, cur);
+            }
+        }
+        else if ( is_ATOM(func->token.type) || func->token.type == DOT || func->token.type == QUOTE) {
+            e = error_define_format;
+            throw Error(error_define_format, "DEFINE", "error_define_format", 0, 0, cur);
+        }
+
         cerr << "\033[1;33m" << "set " << func->token.value <<" is_function = true " << "\033[0m" << endl;
         func->token.is_function = true;
         func->left = args->left->right; // parameter list, 有可能是nil, none args
@@ -1338,17 +1345,18 @@ class FunctionExecutor {
         }
         else {
             // Return the last evaluated argument
-            // try {
+            try {
                 return sequence(args, e, local_defined_table);
-            // }
-            // catch (Error err) {
-            //     if (e == no_return_value) {
-            //         e = unbound_parameter;
-            //         throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, err.root);
-            //     }
-            //     else
-            //         throw err;
-            // }
+            }
+            catch (Error err) {
+                cerr << "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!" << endl;
+                if (err.type == no_return_value) {
+                    throw Error(no_return_value, instr, "unbound parameter", 0, 0, cur);
+                }
+                else
+                    throw err;
+                
+            }
         }
             /*Node_Token *t = args;
             while (t != nullptr && t->token.type != NIL) {
