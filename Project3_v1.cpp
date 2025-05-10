@@ -1017,7 +1017,7 @@ class FunctionExecutor {
                 }
                 catch (Error err) {
                     if (e == no_return_value) {
-                        e = unbound_parameter;
+                        e = unbound_parameter; // unbound condition
                         throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, parameter);
                     }
                     else
@@ -1397,8 +1397,11 @@ class FunctionExecutor {
                 }
                 catch (Error err) {
                     if (err.type == no_return_value) {
+                        if (t->right->token.type == NIL) // 最後一個參數, 若為 no_return_value 則直接回傳 errorType
+                            throw Error(no_return_value, instr, "unbound_test_condition", 0, 0, cur);
+                        
                         e = unbound_test_condition;
-                        throw Error(unbound_test_condition, instr, "unbound_test_condition", 0, 0, parameter);
+                        throw Error(unbound_test_condition, instr, "unbound_test_condition", 0, 0, cur);
                     }
                     else
                         throw err;
@@ -1465,22 +1468,22 @@ class FunctionExecutor {
         while (t != nullptr && t->token.type != NIL) {
             Node_Token *parameter = t->left;
             // cerr << "\033[1;35m" << "parameter: " << parameter->token.value << "\033[0m" << endl;
-            try {
+            // try {
                 // 判斷最後的 argument
                 if (t->right->token.type == NIL) {
                     // cerr << "\033[1;35m" << "last argument: " << parameter->left->token.value << "\033[0m" << endl;
-                    try {
+                    // try {
                         Node_Token* tmp = parameter->left;
                         if (parameter->left->token.type == DOT) {
                             try {
                                 tmp = evalution(parameter->left, e, local_defined_table); // 這邊要 evalution 參數的左邊，設 tmp 為了避免改到原本的樹
                             }
                             catch (Error err) {
-                                if (err.type == no_return_value) {
-                                    e = unbound_test_condition;
-                                    throw Error(unbound_test_condition, instr, "unbound_test_condition", 0, 0, parameter);
-                                }
-                                else
+                                // if (err.type == no_return_value) {
+                                //     e = unbound_test_condition;
+                                //     throw Error(unbound_test_condition, instr, "unbound_test_condition", 0, 0, parameter);
+                                // }
+                                // else
                                     throw err;
                             }
                             
@@ -1495,15 +1498,15 @@ class FunctionExecutor {
                             if (success->token.type != NIL)
                                 return sequence(parameter->right, e, local_defined_table);
                         }
-                    }
-                    catch (Error err) {
-                        if (err.type == no_return_value) {
-                            e = unbound_parameter;
-                            throw Error(unbound_parameter, instr, "unbound_test_condition", 0, 0, parameter);
-                        }
-                        else
-                            throw err;
-                    }
+                    // }
+                    // catch (Error err) {
+                    //     if (err.type == no_return_value) {
+                    //         e = unbound_test_condition;
+                    //         throw Error(unbound_test_condition, instr, "unbound_test_condition", 0, 0, parameter);
+                    //     }
+                    //     else
+                    //         throw err;
+                    // }
                 }
                 // 非最後的 argument
                 else {
@@ -1525,21 +1528,23 @@ class FunctionExecutor {
                         return sequence(parameter->right, e, local_defined_table); // 直接 return right 的執行結果
                     }
                 }
-            }
-            catch (Error err) {
-                // cerr << "\033[1;35m" << "error: " << error << "\033[0m" << endl;
-                // ! no_return_value 好像在裡面就都被改掉了，所以這個判斷式應該不需要
-                if (e == no_return_value) {
-                    if (t->right->token.type == NIL) 
-                        throw err;
-                }
-                else if (e == unbound_parameter) {
-                    e = no_return_value;
-                    throw Error(no_return_value, instr, "unbound parameter", 0, 0, parameter);
-                }
-                else
-                    throw err;
-            }
+            // }
+            // catch (Error err) {
+            //     // cerr << "\033[1;35m" << "error: " << error << "\033[0m" << endl;
+            //     // ! no_return_value 好像在裡面就都被改掉了，所以這個判斷式應該不需要
+            //     if (e == no_return_value || e == unbound_test_condition) {
+            //         cerr << "\033[1;35m" << "no_return_value and unbound_test_condition" << "\033[0m" << endl;
+            //         if (t->right->token.type == NIL) 
+            //             throw err;
+            //         e = Error_None;
+            //     }
+            //     else if (e == unbound_parameter) {
+            //         e = no_return_value;
+            //         throw Error(no_return_value, instr, "unbound parameter", 0, 0, parameter);
+            //     }
+            //     else
+            //         throw err;
+            // }
 
             t = t->right;
         }
