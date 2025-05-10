@@ -296,7 +296,7 @@ class FunctionExecutor {
                         }
                         arg_list.push_back(parameter);
                     }
-                    else if (is_ATOM(parameter->token.type) || parameter->token.type == DOT) {
+                    else if (is_ATOM(parameter->token.type)) { // || parameter->token.type == DOT
                         cerr << "2.     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1"<<endl;
 
                         e = error_define_format;
@@ -548,7 +548,7 @@ class FunctionExecutor {
                     }
                 }
                 // 排除保留字
-                else if (bulid_in_func.find(left_node->left->token.value) != bulid_in_func.end()) {
+                else if (is_reserved_word(left_node->left->token.value)) {
                     e = error_define_format;
                     throw Error(error_define_format, "LAMBDA", "error_define_format", 0, 0, cur);
                 }
@@ -895,8 +895,9 @@ class FunctionExecutor {
                     arg_list.push_back(evalution(parameter, e, local_defined_table));
                 }
                 catch (Error err) {
-                    // cerr << "\033[1;35m" << "error: " << error << "\033[0m" << endl;
-                    if (e == no_return_value) {
+                    cerr << "\033[1;35m" << "error in implement_arithmetic" << "\033[0m" << endl;
+                    if (err.type == no_return_value) {
+                        cerr << "\033[1;35m" << "no_return_value" << "\033[0m" << endl;
                         e = unbound_parameter;
                         throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, parameter);
                     }
@@ -1406,7 +1407,7 @@ class FunctionExecutor {
                 if (c == 2) {
                     if (case_num == 0) {
                         if (arg_list.back()->token.type == NIL) {
-                            //! e = no_return_value;
+                            e = no_return_value;
                             throw Error(no_return_value, instr, "no_return_value", 0, 0, cur);
                         }
                     }
@@ -1468,40 +1469,73 @@ class FunctionExecutor {
                 // 判斷最後的 argument
                 if (t->right->token.type == NIL) {
                     // cerr << "\033[1;35m" << "last argument: " << parameter->left->token.value << "\033[0m" << endl;
-                    
-                    Node_Token* tmp = parameter->left;
-                    if (parameter->left->token.type == DOT)
-                        tmp = evalution(parameter->left, e, local_defined_table); // 這邊要 evalution 參數的左邊，設 tmp 為了避免改到原本的樹
-                        // parameter->left = evalution(parameter->left, e);
-                        
-                    if (tmp->token.type == SYMBOL && tmp->token.value == "else")
-                        return sequence(parameter->right, e, local_defined_table); // 直接 return right 的執行結果
-                    else {// 非 else
-                        Node_Token* success = evalution(tmp, e, local_defined_table);
-                        cerr << "\033[1;31m" << "success: " << success->token.value << "\033[0m" << endl;
-                        cerr << "\033[1;31m" << "success: " << success->token.type << "\033[0m" << endl;
-                        if (success->token.type != NIL)
-                            return sequence(parameter->right, e, local_defined_table);
-
+                    try {
+                        Node_Token* tmp = parameter->left;
+                        if (parameter->left->token.type == DOT) {
+                            try {
+                                tmp = evalution(parameter->left, e, local_defined_table); // 這邊要 evalution 參數的左邊，設 tmp 為了避免改到原本的樹
+                            }
+                            catch (Error err) {
+                                if (err.type == no_return_value) {
+                                    e = unbound_test_condition;
+                                    throw Error(unbound_test_condition, instr, "unbound_test_condition", 0, 0, parameter);
+                                }
+                                else
+                                    throw err;
+                            }
+                            
+                        }
+                            
+                        if (tmp->token.type == SYMBOL && tmp->token.value == "else")
+                            return sequence(parameter->right, e, local_defined_table); // 直接 return right 的執行結果
+                        else {// 非 else
+                            Node_Token* success = evalution(tmp, e, local_defined_table);
+                            cerr << "\033[1;31m" << "success: " << success->token.value << "\033[0m" << endl;
+                            cerr << "\033[1;31m" << "success: " << success->token.type << "\033[0m" << endl;
+                            if (success->token.type != NIL)
+                                return sequence(parameter->right, e, local_defined_table);
+                        }
+                    }
+                    catch (Error err) {
+                        if (err.type == no_return_value) {
+                            e = unbound_parameter;
+                            throw Error(unbound_parameter, instr, "unbound_test_condition", 0, 0, parameter);
+                        }
+                        else
+                            throw err;
                     }
                 }
                 // 非最後的 argument
                 else {
                     // 可執行
-                    Node_Token* success = evalution(parameter->left, e, local_defined_table);
+                    Node_Token* success = nullptr;
+                    try {
+                        success = evalution(parameter->left, e, local_defined_table);
+                    }
+                    catch (Error err) {
+                        if (err.type == no_return_value) {
+                            e = unbound_test_condition;
+                            throw Error(unbound_test_condition, instr, "unbound_test_condition", 0, 0, parameter);
+                        }
+                        else
+                            throw err;
+                    }
                     if (success->token.type != NIL) {
                         cerr << "\033[1;31m" << "success: " << success->token.value << "\033[0m" << endl;
                         return sequence(parameter->right, e, local_defined_table); // 直接 return right 的執行結果
                     }
                 }
-                
-                // arg_list.push_back(evalution(parameter, e, local_defined_table));
             }
             catch (Error err) {
                 // cerr << "\033[1;35m" << "error: " << error << "\033[0m" << endl;
+                // ! no_return_value 好像在裡面就都被改掉了，所以這個判斷式應該不需要
                 if (e == no_return_value) {
-                    e = unbound_parameter;
-                    throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, parameter);
+                    if (t->right->token.type == NIL) 
+                        throw err;
+                }
+                else if (e == unbound_parameter) {
+                    e = no_return_value;
+                    throw Error(no_return_value, instr, "unbound parameter", 0, 0, parameter);
                 }
                 else
                     throw err;
