@@ -189,7 +189,7 @@ class FunctionExecutor {
             args = args->right;
             count++;
         }
-        // cerr << "\033[1;35m" << "count_args: " << count << "\033[0m" << endl;
+        cerr << "\033[1;35m" << "count_args: " << count << "\033[0m" << endl;
         return count;
     }
     bool is_ATOM(TokenType type) {
@@ -256,7 +256,7 @@ class FunctionExecutor {
             }
             cur = cur->right;
         }
-        cerr << "\033[1;35m" << "node: " << node->token.value << "\033[0m" << endl;
+        // cerr << "\033[1;35m" << "node: " << node->token.value << "\033[0m" << endl;
         return node;
     }
     public:
@@ -267,13 +267,20 @@ class FunctionExecutor {
             e = error_level_define;
             throw Error(error_level_define, instr, "DEFINE", 0, 0);
         }
+        else if (c > 2 || args->left->token.type == DOT) {
+            if (args->left->token.type == DOT)  // (define (a) b c)
+                return define_func_more(instr, cur, args, e, local_defined_table);
+            // (define a (b) (c))
+            e = error_define_format;
+            throw Error(error_define_format, "DEFINE", "error_define_format", 0, 0, cur);
+        }
         else if (c < 2) {
+            cerr << "\033[1;35m" << "error: 1. error_define_format\033[0m" << endl;
             e = error_define_format;
             throw Error(error_define_format, "DEFINE", "error_define_format", 0, 0, cur);
         }
         else {
-            if (c > 2 || args->left->token.type == DOT)
-                return define_func_more(instr, cur, args, e, local_defined_table);
+            cerr << "\033[1;35m" << "error: 2. error_define_format\033[0m" << endl;
 
             Node_Token *t = args;
             // ! while (t != nullptr && t->token.type != NIL)
@@ -397,6 +404,7 @@ class FunctionExecutor {
         
         Node_Token* args = cur->right;
         // lambda_args->token.type != NIL && lambda_args != nullptr && defined_args->token.type != NIL && defined_args != nullptr
+        cerr << "\033[1;32m" << " *** test1 *** "  << "\033[0m" << endl;
         while (args->token.type != NIL && args != nullptr) {
             cerr << "\033[1;35m" << "lambda_args: " << args->left->token.value << "\033[0m" << endl;
             arg_list.push_back(evalution(args->left, e, local_defined_table));
@@ -406,7 +414,12 @@ class FunctionExecutor {
         for (auto arg : arg_list) {
             if (func_args->token.type == NIL || func_args == nullptr) {
                 e = incorrect_number_of_arguments;
-                throw Error(incorrect_number_of_arguments, func_name->token.value, "incorrect_number_of_arguments", 0, 0, cur);
+                string func_name_str;
+                if (defined_table.find(func_name->token.value) != defined_table.end())
+                    func_name_str = defined_table[func_name->token.value]->token.value;
+                else func_name_str = func_name->token.value;
+                
+                throw Error(incorrect_number_of_arguments, func_name_str, "incorrect_number_of_arguments", 0, 0, cur);
             }
             new_table[func_args->left->token.value] = arg;
             func_args = func_args->right;
@@ -414,11 +427,23 @@ class FunctionExecutor {
 
         if (func_args->token.type != NIL) {
             e = incorrect_number_of_arguments;
-            throw Error(incorrect_number_of_arguments, func_name->token.value, "incorrect_number_of_arguments", 0, 0, cur);
+            string func_name_str;
+                if (defined_table.find(func_name->token.value) != defined_table.end())
+                    func_name_str = defined_table[func_name->token.value]->token.value;
+                else func_name_str = func_name->token.value;
+
+            throw Error(incorrect_number_of_arguments, func_name_str, "incorrect_number_of_arguments", 0, 0, cur);
         }
-
-        node = sequence(func_exprs, e, new_table);
-
+        cerr << "\033[1;32m" << " *** test2 *** "  << "\033[0m" << endl;
+        try {
+            node = sequence(func_exprs, e, new_table);
+        }
+        catch (Error err) {
+            if (err.type == no_return_value) 
+                throw Error(no_return_value, func_name->token.value, "no return value", 0, 0, cur);
+            
+            else throw err;
+        }
         return node;
     }
 
@@ -427,8 +452,10 @@ class FunctionExecutor {
         pointer_gather.insert(node);
         vector<Node_Token*> arg_list;
 
-        if (count_args(args) != 2)
+        if (count_args(args) != 2) {
+            e = incorrect_number_of_arguments;
             throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
+        }
         else {
             Node_Token *t = args;
             while (t != nullptr && t->token.type != NIL) {
@@ -470,10 +497,7 @@ class FunctionExecutor {
                 // Node_Token* func_Token = defined_table[cur->left->token.value];
                 Node_Token* t = defined_table[cur->left->token.value];
                 cerr << "\033[1;33m" << "--------- judge enter execute_lambda ---------" << "\033[0m" << endl;
-                // if (t != nullptr) {
-                //     cerr << "\033[1;33m" << "t->token.value: " << t->token.value << "\033[0m" << endl;
-                //     cerr << "\033[1;33m" << "t->left->token.type: " << t->left->token.type << "\033[0m" << endl;
-                // }
+
                 if (t != nullptr && t->token.value == "lambda") {
                     cerr << "\033[1;33m" << "--------- enter execute_lambda ---------" << "\033[0m" << endl;
                     // 若為 lambda function, 則
@@ -533,7 +557,7 @@ class FunctionExecutor {
         cerr << "\033[1;33m" << "--------- enter execute_lambda ---------" << "\033[0m" << endl;
         Node_Token* node;
         vector<Node_Token*> arg_list;
-        unordered_map<string, Node_Token*> new_table;
+        unordered_map<string, Node_Token*> new_table = local_defined_table;
 
         // *defined local variable
         
@@ -547,7 +571,7 @@ class FunctionExecutor {
         for (auto arg : arg_list) {
             if (lambda_args->token.type == NIL || lambda_args == nullptr) {
                 e = incorrect_number_of_arguments;
-                throw Error(incorrect_number_of_arguments, lambda_args->token.value, "incorrect_number_of_arguments", 0, 0, lambda);
+                throw Error(incorrect_number_of_arguments, lambda->token.value, "incorrect_number_of_arguments", 0, 0, lambda);
             }
             new_table[lambda_args->left->token.value] = arg;
             lambda_args = lambda_args->right;
@@ -555,6 +579,8 @@ class FunctionExecutor {
 
         if (lambda_args->token.type != NIL) {
             e = incorrect_number_of_arguments;
+            // cerr << "\033[1;35m" << "lambda: " << lambda->token.value << "\033[0m" << endl;
+            // cerr << "\033[1;35m" << "lambda_args: " << lambda_args->token.value << "\033[0m" << endl;
             throw Error(incorrect_number_of_arguments, lambda->token.value, "incorrect_number_of_arguments", 0, 0, lambda);
         }
 
@@ -688,8 +714,10 @@ class FunctionExecutor {
         }
     }
     Node_Token* car(string instr, Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
-        if (count_args(args) != 1)
+        if (count_args(args) != 1) {
+            e = incorrect_number_of_arguments;
             throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
+        }
         else {
             Node_Token *parameter = args->left;
             try {
@@ -716,8 +744,10 @@ class FunctionExecutor {
         // return nullptr;
     }
     Node_Token* cdr(string instr, Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
-        if (count_args(args) != 1)
+        if (count_args(args) != 1) {
+            e = incorrect_number_of_arguments;
             throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
+        }
         else {
             Node_Token *parameter = args->left;
             try {
@@ -748,8 +778,10 @@ class FunctionExecutor {
         node->token.value = "#f";
         node->token.type = NIL;
 
-        if (count_args(args) != 1)
+        if (count_args(args) != 1) {
+            e = incorrect_number_of_arguments;
             throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
+        }
         else {
             
             if (args != nullptr && args->token.type != NIL) {
@@ -843,8 +875,10 @@ class FunctionExecutor {
         vector<Node_Token*> arg_list;
         bool float_flag = false;
 
-        if (count_args(args) < 2)
+        if (count_args(args) < 2) {
+            e = incorrect_number_of_arguments;
             throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
+        }
         else {
             Node_Token *t = args;
             while (t != nullptr && t->token.type != NIL) {
@@ -932,10 +966,14 @@ class FunctionExecutor {
         node->token.value = "#t";
         node->token.type = T;
 
-        if (instr == "not" && count_args(args) != 1)
+        if (instr == "not" && count_args(args) != 1) {
+            e = incorrect_number_of_arguments;
             throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
-        else if ((instr == "and" || instr == "or") && count_args(args) < 2)
+        }
+        else if ((instr == "and" || instr == "or") && count_args(args) < 2) {
+            e = incorrect_number_of_arguments;
             throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
+        }
         else {
             Node_Token *t = args;
             while (t != nullptr && t->token.type != NIL) {
@@ -993,8 +1031,10 @@ class FunctionExecutor {
         node->token.value = "#t";
         node->token.type = T;
 
-        if (count_args(args) < 2)
+        if (count_args(args) < 2) {
+            e = incorrect_number_of_arguments;
             throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
+        }
         else {
             Node_Token *t = args;
             while (t != nullptr && t->token.type != NIL) {
@@ -1116,8 +1156,10 @@ class FunctionExecutor {
         node->token.value = "#t";
         node->token.type = T;
 
-        if (count_args(args) < 2)
+        if (count_args(args) < 2) {
+            e = incorrect_number_of_arguments;
             throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
+        }
         else {
             Node_Token *t = args;
             while (t != nullptr && t->token.type != NIL) {
@@ -1218,8 +1260,10 @@ class FunctionExecutor {
         node->token.value = "#t";
         node->token.type = T;
 
-        if (count_args(args) != 2)
+        if (count_args(args) != 2) {
+            e = incorrect_number_of_arguments;
             throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
+        }
         else {
             Node_Token *t = args;
             while (t != nullptr && t->token.type != NIL) {
@@ -1254,8 +1298,10 @@ class FunctionExecutor {
         node->token.value = "#t";
         node->token.type = T;
 
-        if (count_args(args) != 2)
+        if (count_args(args) != 2) {
+            e = incorrect_number_of_arguments;
             throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
+        }
         else {
             Node_Token *t = args;
             while (t != nullptr && t->token.type != NIL) {
@@ -1286,10 +1332,25 @@ class FunctionExecutor {
         Node_Token* node;
         vector<Node_Token*> arg_list;
 
-        if (count_args(args) < 1)
+        if (count_args(args) < 1) {
+            e = incorrect_number_of_arguments;
             throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
+        }
         else {
-            Node_Token *t = args;
+            // Return the last evaluated argument
+            // try {
+                return sequence(args, e, local_defined_table);
+            // }
+            // catch (Error err) {
+            //     if (e == no_return_value) {
+            //         e = unbound_parameter;
+            //         throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, err.root);
+            //     }
+            //     else
+            //         throw err;
+            // }
+        }
+            /*Node_Token *t = args;
             while (t != nullptr && t->token.type != NIL) {
                 Node_Token *parameter = t->left;
                 try {
@@ -1304,20 +1365,19 @@ class FunctionExecutor {
                         throw err;
                 }
                 t = t->right;
-            }
-        }
+            }*/
+        
 
-        // Return the last evaluated argument
-        node = arg_list.back();
-        return node;
     }
 
     Node_Token* if_func(string instr, Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
         vector<Node_Token*> arg_list;
 
         int c = count_args(args);
-        if (c != 2 && c != 3)
+        if (c != 2 && c != 3) {
+            e = incorrect_number_of_arguments;
             throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
+        }
         else {
             Node_Token *t = args;
             int case_num = 0;
@@ -1337,8 +1397,10 @@ class FunctionExecutor {
 
                 if (c == 2) {
                     if (case_num == 0) {
-                        if (arg_list.back()->token.type == NIL)
+                        if (arg_list.back()->token.type == NIL) {
+                            //! e = no_return_value;
                             throw Error(no_return_value, instr, "no_return_value", 0, 0, cur);
+                        }
                     }
                     else 
                         return arg_list.back();
@@ -1364,22 +1426,28 @@ class FunctionExecutor {
         pointer_gather.insert(node);
 
         int c = count_args(args);
-        if (count_args(args) < 1)
+        if (count_args(args) < 1) {
+            e = error_define_format;
             throw Error(error_define_format, instr, "cond_func", 0, 0, cur);
+        }
         
         Node_Token *t = args;
         while (t != nullptr && t->token.type != NIL) {
             int h = 0;
-            if (is_ATOM(t->left->token.type))
+            if (is_ATOM(t->left->token.type)) {
+                e = error_define_format;
                 throw Error(error_define_format, instr, "cond_func", 0, 0, cur);
+            }
             else {
                 Node_Token *tmp = t->left;
                 while (tmp != nullptr && tmp->token.type != NIL) {
                     h++; // increment height
                     tmp = tmp->right;
                 }
-                if (h < 2)
+                if (h < 2) {
+                    e = error_define_format;
                     throw Error(error_define_format, instr, "cond_func", 0, 0, cur);
+                }
             }
             t = t->right;
         }
@@ -1433,7 +1501,7 @@ class FunctionExecutor {
 
             t = t->right;
         }
-        
+        e = no_return_value;
         throw Error(no_return_value, instr, "no_return_value", 0, 0, cur);
     }
     Node_Token* clean_environment(Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
@@ -1441,8 +1509,10 @@ class FunctionExecutor {
             e = error_level_cleaned;
             throw Error(error_level_cleaned, "CLEAN-ENVIRONMENT", "CLEAN-ENVIRONMENT", 0, 0);
         }
-        else if (count_args(args) != 0)
+        else if (count_args(args) != 0) {
+            e = incorrect_number_of_arguments;
             throw Error(incorrect_number_of_arguments, "clean-environment", "incorrect_number_of_arguments", 0, 0);
+        }
         else {
             // func.clear();
             defined_table.clear();
@@ -1454,8 +1524,10 @@ class FunctionExecutor {
     }
 
     Node_Token* quote_func(Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
-        if (count_args(args) != 1)
+        if (count_args(args) != 1) {
+            e = incorrect_number_of_arguments;
             throw Error(incorrect_number_of_arguments, "quote", "incorrect_number_of_arguments", 0, 0);
+        }
         else 
             return args->left; // Directly return the quoted expression as is
         
@@ -1465,9 +1537,10 @@ class FunctionExecutor {
             e = error_level_exit;
             throw Error(error_level_exit, "EXIT", "EXIT", 0, 0);
         }
-        else if (count_args(args) != 0)
+        else if (count_args(args) != 0) {
+            e = incorrect_number_of_arguments;
             throw Error(incorrect_number_of_arguments, "exit", "incorrect_number_of_arguments", 0, 0);
-        
+        }
         else {
             e = UNEXPECTED_EXIT;
             throw Error(UNEXPECTED_EXIT, "exit", "exit", 0, 0);
