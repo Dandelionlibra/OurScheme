@@ -99,12 +99,13 @@ set<string> bulid_in_func = { // only bulid-in function
     "string-append", "string>?", "string<?", "string=?",
     "begin", "if", "cond",
     "clean-environment",
-    "'", "quote", "exit"
+    "'", "quote", "exit",
+    "verbose?", "verbose"
 };
 // set <string> func; // all function name, unclude self-defined function
 unordered_map<string, Node_Token*> defined_table; // store the variable name, value and defined func
 set <Node_Token*> pointer_gather; // store the variable name and value
-
+bool verbose_mode = true; // verbose mode, default is true
 
 // error message 
 class Error {
@@ -621,61 +622,76 @@ class FunctionExecutor {
             cerr << "\033[1;35m" << "error: 1. error_define_format\033[0m" << endl;
             e = error_define_format;
             // cur->left->token.is_function = false;
-            throw Error(error_define_format, "Let", "error_define_format", 0, 0, cur);
+            throw Error(error_define_format, "LET", "error_define_format", 0, 0, cur);
         }
         
         Node_Token* first_arg = args->left;
         if (first_arg->token.type != DOT && first_arg->token.type != NIL) { // 第一個參數必須是 expression
             e = error_define_format;
-            throw Error(error_define_format, "Let", "error_define_format", 0, 0, cur);
+            throw Error(error_define_format, "LET", "error_define_format", 0, 0, cur);
         }
-        else {
-            // Node_Token* parameter = first_arg;
-            while (first_arg != nullptr && first_arg->token.type != NIL) {
-                Node_Token* arg = first_arg->left;
-                if (arg->left->token.type != SYMBOL) {
-                    e = error_define_format;
-                    throw Error(error_define_format, "Let", "error_define_format", 0, 0, cur);
+        // (let ( (x (if 2 3)) (5) )  10 ) -> error (5) 要刪掉
+        // else if (first_arg->right != nullptr && first_arg->right->token.type != NIL) { // 
+        //     e = error_define_format;
+        //     throw Error(error_define_format, "LET", "error_define_format", 0, 0, cur);
+        // }
+
+        while (first_arg != nullptr && first_arg->token.type != NIL) {
+            Node_Token* arg = first_arg->left;
+            if (arg == nullptr || arg->token.type != DOT || arg->left->token.type != SYMBOL) {
+                e = error_define_format;
+                throw Error(error_define_format, "LET", "error_define_format", 0, 0, cur);
+            }
+            // else
+            if (is_reserved_word(arg->left->token.value)) {
+                e = error_define_format;
+                throw Error(error_define_format, "LET", "error_define_format", 0, 0, cur);
+            }
+
+            if (count_args(arg) != 2) { // (x 1 2) -> error, (x 1) -> ok
+                e = error_define_format;
+                throw Error(error_define_format, "LET", "error_define_format", 0, 0, cur);
+            }
+            first_arg = first_arg->right;
+        }
+        
+        first_arg = args->left;
+        while (first_arg != nullptr && first_arg->token.type != NIL) {
+            Node_Token* arg = first_arg->left;
+
+            try {
+                cerr << "\033[1;35m" << "4. arg: " << arg->token.value << "\033[0m" << endl;
+                new_table[arg->left->token.value] = evalution(arg->right->left, e, local_defined_table);
+            }
+            catch (Error err) {
+                cerr << "\033[1;31m" << "******* 1. let error *******" << "\033[0m" << endl;
+                throw err;
+            }
+            
+            first_arg = first_arg->right;
+        }
+
+        Node_Token* other_arg = args->right;
+        while (other_arg != nullptr && other_arg->token.type != NIL) {
+            Node_Token* arg = other_arg->left;
+            try {
+                node = evalution(arg, e, new_table);
+            }
+            catch (Error err) {
+                cerr << "\033[1;31m" << "******* 2. let error *******" << "\033[0m" << endl;
+                if (e == no_return_value) {
+                    if (other_arg->right == nullptr || other_arg->right->token.type == NIL)
+                        throw err; // If it's the last s-exp
+                    else e = Error_None; // otherwise, ignore the error
                 }
-                // else
-                if (is_reserved_word(arg->left->token.value)) {
-                    e = error_define_format;
-                    throw Error(error_define_format, "Let", "error_define_format", 0, 0, cur);
-                }
-                
-                try {
-                    // store the variable name and value
-                    new_table[arg->left->token.value] = evalution(arg->right->left, e, local_defined_table);
-                }
-                catch (Error err) {
-                    cerr << "\033[1;31m" << "******* 1. let error *******" << "\033[0m" << endl;
+                else
                     throw err;
-                }
-                
-                first_arg = first_arg->right;
             }
 
-            Node_Token* other_arg = args->right;
-            while (other_arg != nullptr && other_arg->token.type != NIL) {
-                Node_Token* arg = other_arg->left;
-                try {
-                    node = evalution(arg, e, new_table);
-                }
-                catch (Error err) {
-                    cerr << "\033[1;31m" << "******* 2. let error *******" << "\033[0m" << endl;
-                    if (e == no_return_value) {
-                        if (other_arg->right == nullptr || other_arg->right->token.type == NIL)
-                            throw err; // If it's the last s-exp
-                        else e = Error_None; // otherwise, ignore the error
-                    }
-                    else
-                        throw err;
-                }
-
-                other_arg = other_arg->right;
-            }
-
+            other_arg = other_arg->right;
         }
+
+        
 
         return node;
     }
@@ -912,6 +928,8 @@ class FunctionExecutor {
                     cerr << "\033[1;35m" << "error in implement_arithmetic" << "\033[0m" << endl;
                     if (err.type == no_return_value) {
                         cerr << "\033[1;35m" << "no_return_value" << "\033[0m" << endl;
+                        if (parameter->left->token.type == DOT)
+                            throw err;
                         e = unbound_parameter;
                         throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, parameter);
                     }
@@ -1609,6 +1627,52 @@ class FunctionExecutor {
         return nullptr;
     }
 
+    Node_Token* verbose_func(string instr, Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
+        Node_Token* node = new Node_Token();
+        pointer_gather.insert(node);
+        node->token.value = "#t";
+        node->token.type = T;
+
+        if (instr == "verbose") {
+            if (count_args(args) != 1) {
+                e = incorrect_number_of_arguments;
+                throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
+            }
+            else {
+                Node_Token *parameter = args->left;
+                try {
+                    Node_Token* left = evalution(parameter, e, local_defined_table);
+                    if (left->token.type == NIL) {
+                        verbose_mode = false;
+                        node->token.value = "#f";
+                        node->token.type = NIL;
+                    }
+                    else verbose_mode = true;
+                }
+                catch (Error err) {
+                    if (err.type == no_return_value) {
+                        e = unbound_parameter;
+                        throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, parameter);
+                    }
+                    else
+                        throw err;
+                }
+            }
+        }
+        else if (instr == "verbose?") {
+            if (count_args(args) != 0) {
+                e = incorrect_number_of_arguments;
+                throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
+            }
+            else {
+                if (!verbose_mode) {
+                    node->token.value = "#f";
+                    node->token.type = NIL;
+                }
+            }
+        }
+        return node;
+    }
     Node_Token* evalution(Node_Token *cur, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
         cerr << "-------- enter evalution --------" <<endl;
         if (cur == nullptr) return nullptr;
@@ -1801,6 +1865,9 @@ class FunctionExecutor {
                 return quote_func(cur, cur->right, e, local_defined_table);
             else if (func_name == "exit")
                 return exit_func(cur, cur->right, e, local_defined_table);
+            else if (func_name == "verbose" || func_name == "verbose?") 
+                return verbose_func(func_name, cur, cur->right, e, local_defined_table);
+                
             else if (defined_table.find(func_name) != defined_table.end()) {
                 cerr << "-------- self defined function --------\n";
                 // cerr << "\033[1;35m" << "defined_table.find(func_name) != defined_table.end(): " << func_name << "\033[0m" << endl;
@@ -3130,7 +3197,7 @@ public:
   
         if (finish_input) {
             cerr << "\033[1;32mfinish_input\033[0m" << endl;
-            // print_vector(tokenBuffer);
+            print_vector(tokenBuffer);
 
             while (true) {
                 c_peek = cin.peek();
@@ -3176,6 +3243,81 @@ public:
         else {
             cerr << "\033[1;31mmeet unexpected error\033[0m" << endl;
         }
+        /*if (finish_input) {
+            cerr << "\033[1;32mfinish_input\033[0m" << endl;
+            print_vector(tokenBuffer);
+            string temp;
+
+            while (true) {
+                c_peek = cin.peek();
+
+                if (!temp.empty()) {
+                    while (true) {
+                        c_peek = cin.peek();
+                        if (c_peek == EOF) {
+                            c_peek = getchar(); // skip the EOF
+                            for (char c : temp)
+                                ungetc(c, stdin); // push stored content back to the buffer
+                            ungetc(c_peek, stdin);
+                        }
+                        else if (is_enter(c_peek) || is_space(c_peek) || is_comment(c_peek)) {
+                            
+                            return;
+                        }
+                        else
+                            temp.push_back(getchar());
+                    }
+                    
+                    return;
+                }
+                else if (c_peek == EOF) {
+                    // is_EOF = true;
+                    cerr << "after finish_input, throw error UNEXPECTED_EOF" << endl;
+                    if (!temp.empty()) {
+                        c_peek = getchar(); // skip the EOF
+                        for (char c : temp) {
+                            ungetc(c, stdin); // push stored content back to the buffer
+                        }
+                    }
+                    // c_peek = getchar(); // skip the EOF
+                    // ungetc(c_peek, stdin); // push EOF back to the buffer
+                    return; // 交給下次呼叫 get_token() 處理此 EOF，因為要先建樹
+                }
+                else if (is_enter(c_peek)) {
+                    cerr << "after finish_input, is_enter" << endl;
+                    getchar(); // skip the char of '\n'}
+                    return;
+                }
+                else if (is_space(c_peek)) {
+                    cerr << "after finish_input, is_space" << endl;
+                    start_column++;
+                    getchar(); // skip the char of ' '
+                    continue;
+                }
+                else if (is_comment(c_peek)) {
+                    cerr << "after finish_input, is_comment" << endl;
+                    string trash;
+                    getline(cin, trash);
+                    for (char c : trash) {
+                        if (c == EOF)
+                            ungetc(c, stdin); // push EOF back to the buffer
+                    }
+                    start_column = 1;
+        
+                    cerr << "\033[1;33mthrow trash in get_token: " << trash << "\033[0m" << endl;
+                    return;
+                }
+                else {
+                    cerr << "\033[1;31m"<< "c_peek: " << c_peek << "\033[0m" << endl;
+                    temp.push_back(getchar());
+                    // return;
+                }
+
+            }
+        }
+        else {
+            cerr << "\033[1;31mmeet unexpected error\033[0m" << endl;
+        }*/
         // ! print test
         
 
@@ -3354,7 +3496,8 @@ int main() {
                     break;
                 case defined:
                     cerr << "\033[1;31m" << "defined" << "\033[0m" << endl;
-                    cout << e.message << endl;
+                    if (verbose_mode)
+                        cout << e.message << endl;
                     Lexical.reset();
                     break;
                 case error_level_define:
@@ -3381,8 +3524,8 @@ int main() {
                 
                 case cleaned:
                     cerr << "\033[1;31m" << "cleaned" << "\033[0m" << endl;
-                    cout << e.message << endl;
-                    // func = bulid_in_func;
+                    if (verbose_mode)
+                        cout << e.message << endl;
                     push_bulid_in_func_in_defined_table();
                     Lexical.reset();
                     break;
