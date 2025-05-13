@@ -549,10 +549,30 @@ class FunctionExecutor {
             // cur->left->token.is_function = false;
             throw Error(error_define_format, "LAMBDA", "error_define_format", 0, 0, cur);
         }
+        else if (args->left->token.type != DOT && args->left->token.type != NIL ) { // (lambda x  (y z)) -> error
+            e = error_define_format;
+            throw Error(error_define_format, "LAMBDA", "error_define_format", 0, 0, cur);
+        }
+        // else if (args->left->token.type != NIL) { // (lambda x  (y z)) -> error
+        //     cerr << "\033[1;35m" << "args->left->token.type != NIL" << endl;
+        //     // cerr << "\033[1;35m" << "args->left->token.type: " << args->left->token.type << "\033[0m" << endl;
+        //     cerr << "\033[1;35m" << "args->left->token.value: " << args->left->token.value << "\033[0m" << endl;
+        //     e = error_define_format;
+        //     throw Error(error_define_format, "LAMBDA", "error_define_format", 0, 0, cur);
+        // }
         else {
             node->left = args->left; // 參數列表
             node->right = args->right; // expression
-            Node_Token* left_node = node->left;
+            Node_Token* left_node;
+            if (args->left->token.type == NIL) left_node = nullptr; // ( lambda () (y)( z) ) == ( lambda nil (y)( z) ) == ( lambda #f (y)( z) )
+            else {
+                left_node = node->left;
+                if (left_node->left->token.type == NIL) { // ( lambda (nil) (y)( z) ) == ( lambda (#f) (y)( z) )
+                    e = error_define_format;
+                    throw Error(error_define_format, "LAMBDA", "error_define_format", 0, 0, cur);
+                }
+            }
+
             while (left_node != nullptr && left_node->token.type != NIL) {
                 if (left_node->left->token.type != SYMBOL) {
                     if (left_node->left->token.type == DOT)
@@ -581,6 +601,15 @@ class FunctionExecutor {
         vector<Node_Token*> arg_list;
         unordered_map<string, Node_Token*> new_table = local_defined_table;
 
+        int init_c = count_args(lambda->left);
+        int input_c = count_args(defined_args); // lambda args
+        cerr << "\033[1;35m" << "init_c: " << init_c << "\033[0m" << endl;
+        cerr << "\033[1;35m" << "input_c: " << input_c << "\033[0m" << endl;
+        if (input_c != init_c) { // 參數
+            e = incorrect_number_of_arguments;
+            throw Error(incorrect_number_of_arguments, lambda->token.value, "incorrect_number_of_arguments", 0, 0, lambda);
+        }
+        
         // *defined local variable
         
         while (defined_args->token.type != NIL && defined_args != nullptr) {
