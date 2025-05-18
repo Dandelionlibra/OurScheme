@@ -605,7 +605,7 @@ class FunctionExecutor {
         int input_c = count_args(defined_args); // lambda args
         cerr << "\033[1;35m" << "init_c: " << init_c << "\033[0m" << endl;
         cerr << "\033[1;35m" << "input_c: " << input_c << "\033[0m" << endl;
-        if (input_c != init_c) { // 參數
+        if (input_c != init_c) { // 參數量不相同
             e = incorrect_number_of_arguments;
             throw Error(incorrect_number_of_arguments, lambda->token.value, "incorrect_number_of_arguments", 0, 0, lambda);
         }
@@ -1449,47 +1449,110 @@ class FunctionExecutor {
             throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
         }
         else {
-            Node_Token *t = args;
-            int case_num = 0;
-            while (t != nullptr && t->token.type != NIL) {
-                Node_Token *parameter = t->left;
-                try {
-                    arg_list.push_back(evalution(parameter, e, local_defined_table));
+            // (if 條件式 判斷式 判斷式)
+            Node_Token *judge_elements;
+            
+            try {
+                judge_elements = evalution(args->left, e, local_defined_table);
+                // cout << "\033[1;35m" << "judge_elements: " << judge_elements->token.value << "\033[0m" << endl;
+                // cout << "\033[1;35m" << "judge_elements type: " << judge_elements->token.type << "\033[0m" << endl;
+            }
+            catch (Error err) {
+                if (err.type == no_return_value) { // 條件式為 no_return_value 回傳 unbound_test_condition
+                    e = unbound_test_condition;
+                    throw Error(unbound_test_condition, instr, "unbound_test_condition", 0, 0, cur);
                 }
-                catch (Error err) {
-                    if (err.type == no_return_value) {
-                        if (t->right->token.type == NIL) // 最後一個參數, 若為 no_return_value 則直接回傳 errorType
-                            throw Error(no_return_value, instr, "unbound_test_condition", 0, 0, cur);
-                        
-                        e = unbound_test_condition;
-                        throw Error(unbound_test_condition, instr, "unbound_test_condition", 0, 0, cur);
+                else
+                    throw err;
+            }
+            
+            Node_Token *exp = args->right;
+            // while (exp != nullptr && exp->token.type != NIL) {
+                Node_Token *ans;
+                if (c == 2) { 
+                    try {
+                        ans = evalution(exp->left, e, local_defined_table);
                     }
-                    else
+                    catch (Error err) {
                         throw err;
-                }
-
-                if (c == 2) {
-                    if (case_num == 0) {
-                        if (arg_list.back()->token.type == NIL) {
-                            e = no_return_value;
-                            throw Error(no_return_value, instr, "no_return_value", 0, 0, cur);
-                        }
                     }
-                    else 
-                        return arg_list.back();
+
+                    if (judge_elements->token.type == NIL) {
+                        e = no_return_value;
+                        throw Error(no_return_value, instr, "no_return_value", 0, 0, cur);
+                    }
+                    else return ans; // 直接 return right 的執行結果
                 }
                 else if (c == 3) {
-                    if (case_num == 0) {
-                        if (arg_list.back()->token.type == NIL)
-                            t = t->right; // 進入 else 的情況(第三個參數)，跳過第二個參數
+                    try {
+                        if (judge_elements->token.type != NIL) {
+                            ans = evalution(exp->left, e, local_defined_table);
+                            return ans;
+                        }
+                        else {
+                            ans = evalution(exp->right->left, e, local_defined_table);
+                            return ans;
+                        } 
                     }
-                    else
-                        return arg_list.back();
-                }
+                    catch (Error err) {
+                        throw err;
+                    }
 
-                case_num++;
-                t = t->right;
-            }
+
+                }
+            //     exp = exp->right;
+            // }
+
+
+
+            
+            // else if (c == 3) {
+
+            // }
+
+
+
+            // int case_num = 0;
+            // while (t != nullptr && t->token.type != NIL) {
+            //     Node_Token *parameter = t->left;
+            //     try {
+            //         arg_list.push_back(evalution(parameter, e, local_defined_table));
+            //     }
+            //     catch (Error err) {
+                    
+            //         if (err.type == no_return_value) {
+            //             // if (t->right->token.type == NIL) // 最後一個參數, 若為 no_return_value 則直接回傳 errorType
+            //                 throw Error(no_return_value, instr, "unbound_test_condition", 0, 0, cur);
+                        
+            //             // e = unbound_test_condition;
+            //             // throw Error(unbound_test_condition, instr, "unbound_test_condition", 0, 0, cur);
+            //         }
+            //         else
+            //             throw err;
+            //     }
+
+            //     if (c == 2) {
+            //         if (case_num == 0) {
+            //             if (arg_list.back()->token.type == NIL) {
+            //                 e = no_return_value;
+            //                 throw Error(no_return_value, instr, "no_return_value", 0, 0, cur);
+            //             }
+            //         }
+            //         else 
+            //             return arg_list.back();
+            //     }
+            //     else if (c == 3) {
+            //         if (case_num == 0) {
+            //             if (arg_list.back()->token.type == NIL)
+            //                 t = t->right; // 進入 else 的情況(第三個參數)，跳過第二個參數
+            //         }
+            //         else
+            //             return arg_list.back();
+            //     }
+
+            //     case_num++;
+            //     t = t->right;
+            // }
         }
 
         return nullptr;
@@ -1545,7 +1608,7 @@ class FunctionExecutor {
                                 //     throw Error(unbound_test_condition, instr, "unbound_test_condition", 0, 0, parameter);
                                 // }
                                 // else
-                                    throw err;
+                                throw err;
                             }
                             
                         }
