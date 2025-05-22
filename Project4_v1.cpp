@@ -651,7 +651,7 @@ class FunctionExecutor {
             throw Error(incorrect_number_of_arguments, lambda->token.value, "incorrect_number_of_arguments", 0, 0, lambda);
         }
 
-
+        
         return sequence(lambda->right, e, new_table);
     }
     
@@ -2082,7 +2082,17 @@ class FunctionExecutor {
                 //            arg1 *  body1  *
                 //                / \      /   \
                 //              arg2 nil  body2 nil
-                return execute_lambda(t, cur->right, e, local_defined_table); // execute lambda function
+                try {
+                    return execute_lambda(t, cur->right, e, local_defined_table); // execute lambda function
+                }
+                catch (Error err) {
+                    if (e == no_return_value) {
+                        throw Error(no_return_value, func_name, "no_return_value", 0, 0, cur);
+                    }
+                    else
+                        throw err;
+                }
+                
             }
             
 
