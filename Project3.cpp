@@ -26,6 +26,7 @@ enum TokenType {
            // white-spaces ; 
            // Symbols are case-sensitive 
            // (i.e., uppercase and lowercase are different);
+    USERERROR= 6, // user error
     None = 0
 
 };
@@ -101,7 +102,11 @@ set<string> bulid_in_func = { // only bulid-in function
     "begin", "if", "cond",
     "clean-environment",
     "'", "quote", "exit",
-    "verbose?", "verbose"
+    "verbose?", "verbose",
+
+    "create-error-object", "error-object?", 
+    "read", "write", "display-string", 
+    "newline", "eval", "set!"
 };
 // set <string> func; // all function name, unclude self-defined function
 unordered_map<string, Node_Token*> defined_table; // store the variable name, value and defined func
@@ -259,7 +264,7 @@ class FunctionExecutor {
                         // throw err; // If it's the last s-exp
                     }
                     else {
-                        cerr << "\033[1;31m" << "in sequence no return error: " << err.message << "\033[0m" << endl;
+                        // cerr << "\033[1;31m" << "in sequence no return error: " << err.message << "\033[0m" << endl;
                         // cerr 
                         e = Error_None; // otherwise, ignore the error
                         
@@ -400,7 +405,7 @@ class FunctionExecutor {
     }
 
     Node_Token* self_defined_function(string instr, Node_Token *cur, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
-        cerr << "\033[1;33m" << "--------- enter self_defined_function ---------" << "\033[0m" << endl;
+        // cerr << "\033[1;33m" << "--------- enter self_defined_function ---------" << "\033[0m" << endl;
         Node_Token* node;
         vector<Node_Token*> arg_list;
         unordered_map<string, Node_Token*> new_table; // = local_defined_table
@@ -523,7 +528,7 @@ class FunctionExecutor {
         return node;
     }
     Node_Token* lambda(Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
-        cerr << "\033[1;33m" << "--------- enter lambda ---------" << "\033[0m" << endl;
+        // cerr << "\033[1;33m" << "--------- enter lambda ---------" << "\033[0m" << endl;
 
         // cerr << "\033[1;35m" << "cur->left: " << cur->left->token.value << "\033[0m" << endl;
         if (cur->left->token.value != "lambda" && defined_table.find(cur->left->token.value) != defined_table.end()) {
@@ -531,6 +536,27 @@ class FunctionExecutor {
             if (defined_table[cur->left->token.value]->token.is_function) {
                 // Node_Token* func_Token = defined_table[cur->left->token.value];
                 Node_Token* t = defined_table[cur->left->token.value];
+                // cerr << "\033[1;33m" << "--------- judge enter execute_lambda ---------" << "\033[0m" << endl;
+
+                if (t != nullptr && t->token.value == "lambda") {
+                    // cerr << "\033[1;33m" << "--------- enter execute_lambda ---------" << "\033[0m" << endl;
+                    // 若為 lambda function, 則
+                    //                  lambda <- t.token
+                    //                  /    \
+                    //          tmp -> *      * 
+                    //               / \    /   \
+                    //            arg1 *  body1  *
+                    //                / \      /   \
+                    //              arg2 nil  body2 nil
+                    return execute_lambda(t, cur->right, e, local_defined_table); // execute lambda function
+                }
+            }
+        }
+        else if (cur->left->token.value != "lambda" && local_defined_table.find(cur->left->token.value) != local_defined_table.end()) {
+            // cerr << "\033[1;35m" << "cur->left: " << cur->left->token.value << "\033[0m" << endl;
+            if (local_defined_table[cur->left->token.value]->token.is_function) {
+                // Node_Token* func_Token = defined_table[cur->left->token.value];
+                Node_Token* t = local_defined_table[cur->left->token.value];
                 // cerr << "\033[1;33m" << "--------- judge enter execute_lambda ---------" << "\033[0m" << endl;
 
                 if (t != nullptr && t->token.value == "lambda") {
@@ -610,8 +636,8 @@ class FunctionExecutor {
 
         int init_c = count_args(lambda->left);
         int input_c = count_args(defined_args); // lambda args
-        cerr << "\033[1;35m" << "init_c: " << init_c << "\033[0m" << endl;
-        cerr << "\033[1;35m" << "input_c: " << input_c << "\033[0m" << endl;
+        // cerr << "\033[1;35m" << "init_c: " << init_c << "\033[0m" << endl;
+        // cerr << "\033[1;35m" << "input_c: " << input_c << "\033[0m" << endl;
         if (input_c != init_c) { // 參數量不相同
             e = incorrect_number_of_arguments;
             throw Error(incorrect_number_of_arguments, lambda->token.value, "incorrect_number_of_arguments", 0, 0, lambda);
@@ -631,8 +657,8 @@ class FunctionExecutor {
                 e = incorrect_number_of_arguments;
                 throw Error(incorrect_number_of_arguments, lambda->token.value, "incorrect_number_of_arguments", 0, 0, lambda);
             }
-            cerr << "\033[1;31m" << "lambda_args: " << lambda_args->left->token.value << "\033[0m" << endl;
-            cerr << "\033[1;31m" << "arg: " << arg->token.value << "\033[0m" << endl;
+            // cerr << "\033[1;31m" << "lambda_args: " << lambda_args->left->token.value << "\033[0m" << endl;
+            // cerr << "\033[1;31m" << "arg: " << arg->token.value << "\033[0m" << endl;
             new_table[lambda_args->left->token.value] = arg;
             lambda_args = lambda_args->right;
         }
@@ -647,7 +673,7 @@ class FunctionExecutor {
     }
     
     Node_Token* let(string instr, Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
-        cerr << "\033[1;33m" << "--------- enter let ---------" << "\033[0m" << endl;
+        // cerr << "\033[1;33m" << "--------- enter let ---------" << "\033[0m" << endl;
         Node_Token* node;
         // pointer_gather.insert(node);
         // vector<Node_Token*> arg_list;
@@ -693,7 +719,7 @@ class FunctionExecutor {
             Node_Token* tmp = first_arg->left;
 
             try {
-                cerr << "\033[1;35m" << "4. arg: " << tmp->left->token.value << "\033[0m" << endl;
+                // cerr << "\033[1;35m" << "4. arg: " << tmp->left->token.value << "\033[0m" << endl;
                 new_table[tmp->left->token.value] = evalution(tmp->right->left, e, local_defined_table);
             }
             catch (Error err) {
@@ -1706,8 +1732,60 @@ class FunctionExecutor {
         }
         return node;
     }
+    
+    Node_Token* err_obj(string instr, Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
+        Node_Token* node = new Node_Token();
+        pointer_gather.insert(node);
+        node->token.value = "#t";
+        node->token.type = T;
+
+        if (count_args(args) != 1) {
+            e = incorrect_number_of_arguments;
+            throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
+        }
+
+        Node_Token *parameter;
+        try{
+            parameter = evalution(args->left, e, local_defined_table);
+        }
+        catch (Error err) {
+            if (e == no_return_value) {
+                e = unbound_parameter;
+                throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, args->left);
+            }
+            else
+                throw err;
+        }
+
+        if (instr == "create-error-object") {
+            if (parameter->token.type != STRING) {
+                e = incorrect_argument_type;
+                throw Error(incorrect_argument_type, instr, parameter->token.value, 0, 0, parameter);
+            }
+
+            node->token.value = parameter->token.value;
+            node->token.type = USERERROR;
+            node->token.is_function = false;
+            node->left = nullptr;
+            node->right = nullptr;
+            node->parent = nullptr;
+
+        }
+        else if (instr == "error-object?") {
+            if (parameter->token.type != USERERROR) {
+                node->token.value = "#f";
+                node->token.type = NIL;
+            }
+        }
+
+        return node;
+
+    }
+    
+    
+    
     Node_Token* evalution(Node_Token *cur, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
-        cerr << "-------- enter evalution --------" <<endl;
+        // cerr << "-------- enter evalution --------" <<endl;
         if (cur == nullptr) return nullptr;
 
         string func_name;
@@ -1758,11 +1836,11 @@ class FunctionExecutor {
             throw Error(undefined_function, func_Token->token.value, func_Token->token.value ,func_Token->token.line, func_Token->token.column, func_Token);
         }
         else if (func_Token->token.type == SYMBOL || func_Token->token.type == QUOTE) {
-            cerr << "\033[1;35m" << "is_ATOM(func_Token->token.type): " << func_Token->token.value << "\033[0m" << endl;
+            // cerr << "\033[1;35m" << "is_ATOM(func_Token->token.type): " << func_Token->token.value << "\033[0m" << endl;
             // if (func_Token->token.type != SYMBOL ) { // || bulid_in_func.find(func_name) == bulid_in_func.end()
             // }
             if (local_defined_table.find(func_name) != local_defined_table.end()) { // check whether the first argument is a function
-                cerr << "\033[1;32m" << "In local_defined_table: " << func_name << "\033[0m" << endl;
+                // cerr << "\033[1;32m" << "In local_defined_table: " << func_name << "\033[0m" << endl;
                 Node_Token* tmp;
                 if (local_defined_table.find(func_name) != local_defined_table.end()) {
                     tmp = local_defined_table[func_name]; // get the function token
@@ -1778,12 +1856,12 @@ class FunctionExecutor {
                     throw Error(undefined_function, func_name, func_name ,func_Token->token.line, func_Token->token.column, func_Token);
                 }
                 else {
-                    cerr << "\033[1;33m" << "********* set the function token to be executable *********"  << endl;
+                    // cerr << "\033[1;33m" << "********* set the function token to be executable *********"  << endl;
                     // func_Token->token.is_function = true; // set the function token to be executable
                 }
             }
             else if (defined_table.find(func_name) != defined_table.end()) { // check whether the first argument is a function
-                cerr << "\033[1;32m" << "In defined_table: " << func_name << "\033[0m" << endl;
+                // cerr << "\033[1;32m" << "In defined_table: " << func_name << "\033[0m" << endl;
                 Node_Token* tmp;
                 if (defined_table.find(func_name) != defined_table.end()) {
                     tmp = defined_table[func_name]; // get the function token
@@ -1806,8 +1884,15 @@ class FunctionExecutor {
                 // }
             }
             
+            if (func_name == "create-error-object")
+                return err_obj("create-error-object", cur, cur->right, e, local_defined_table);
+            else if (func_name == "error-object?")
+                return err_obj("error-object?", cur, cur->right, e, local_defined_table);
+
+
+
             
-            if (func_name == "define")
+            else if (func_name == "define")
                 return define_func("define", cur, cur->right, e, local_defined_table);
             else if (func_name == "cons")
                 return cons("cons", cur, cur->right, e, local_defined_table);
@@ -1902,13 +1987,13 @@ class FunctionExecutor {
                 return verbose_func(func_name, cur, cur->right, e, local_defined_table);
                 
             else if (defined_table.find(func_name) != defined_table.end()) {
-                cerr << "-------- self defined function --------\n";
-                cerr << "func_name: " << func_name << endl;
+            //     cerr << "-------- self defined function --------\n";
+            //     cerr << "func_name: " << func_name << endl;
                 return self_defined_function(func_name, cur, e, local_defined_table); // execute self defined function
             }
             
             else { // undefined function
-                cerr << "-------- undefined function --------\n";
+                // cerr << "-------- undefined function --------\n";
                 
                 e = unbound_symbol;
                 throw Error(unbound_symbol, func_name, func_name ,func_Token->token.line, func_Token->token.column, cur);
@@ -3028,7 +3113,7 @@ public:
         // CurrentToken("");
     }
 
-    string Get_Str(char &c_peek, Token &tmptoken, errorType &error, bool end = false) {
+    string Get_Str(char &c_peek, Token &tmptoken, errorType &error, bool &finish_input, bool end = false) {
         // int leftCount = 0, rightCount = 0; // count '(' and ')'
         string str = "";
         char c = '\0';
@@ -3042,6 +3127,13 @@ public:
                 set_token_line_and_column(tmptoken, 0, 0, "eof");
                 return "eof";
             }
+            // if ()
+
+            // ungetc(c, stdin); // push EOF back to the buffer
+
+
+
+
             // 如果目前str內有symbol，下個讀入的如果是特殊字元，則先回傳當前str作為token
             if (!str.empty() && is_special_symbol(c_peek)) {
                 set_token_line_and_column(tmptoken, line, column-str.size(), str);
@@ -3144,7 +3236,7 @@ public:
         if (str.empty())
             // cout << "\033[1;32m----------empty-----------\033[0m" << endl;
             // 只輸入空白字元或換行符時，不會回傳空字串
-            return Get_Str(c_peek, tmptoken, error);
+            return Get_Str(c_peek, tmptoken, error, finish_input);
         
         else
             return str;
@@ -3162,7 +3254,7 @@ public:
             try {
                 // int tmp_line = line;
                 // int tmp_column = column;
-                tmpstr = Get_Str(c_peek, tmptoken, error); // get the string from cin
+                tmpstr = Get_Str(c_peek, tmptoken, error, finish_input); // get the string from cin
                 if (tmpstr == "t")
                     tmptoken.value = "#t";
                 tmptoken.is_function = false; // ! reset is_function flag
@@ -3387,6 +3479,8 @@ void push_bulid_in_func_in_defined_table() {
 }
 
 
+
+
 int main() {
     // func = bulid_in_func;
     push_bulid_in_func_in_defined_table(); // push bulid_in_func to defined_table
@@ -3408,6 +3502,8 @@ int main() {
     
     while (!Lexical.Get_is_EOF() && !is_exit) { // while (true)
         bool finish_input = false;
+        bool encounter_eof;
+        bool buffer_remain;
         try {
             cout << "\n> ";
             errorType E = Error_None;
