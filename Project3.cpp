@@ -1488,7 +1488,7 @@ class FunctionExecutor {
             catch (Error err) {
                 if (e == no_return_value) { // 條件式為 no_return_value 回傳 unbound_test_condition
                     e = unbound_test_condition;
-                    throw Error(unbound_test_condition, instr, "unbound_test_condition", 0, 0, cur);
+                    throw Error(unbound_test_condition, instr, "unbound_test_condition", 0, 0, args->left);
                 }
                 else
                     throw err;
@@ -1580,10 +1580,10 @@ class FunctionExecutor {
                         tmp = evalution(parameter->left, e, local_defined_table); // 這邊要 evalution 參數的左邊，設 tmp 為了避免改到原本的樹
                     }
                     catch (Error err) {
-                        // if (err.type == no_return_value) {
-                        //     e = unbound_test_condition;
-                        //     throw Error(unbound_test_condition, instr, "unbound_test_condition", 0, 0, parameter);
-                        // }
+                        if (err.type == no_return_value) {
+                            e = unbound_test_condition;
+                            throw Error(unbound_test_condition, instr, "unbound_test_condition", 0, 0, parameter->left);
+                        }
                         // else
                         throw err;
                     }
@@ -1602,7 +1602,7 @@ class FunctionExecutor {
                     catch (Error err) { // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
                         if (e == no_return_value) {
                             e = unbound_test_condition;
-                            throw Error(unbound_test_condition, instr, "unbound_test_condition", 0, 0, parameter);
+                            throw Error(unbound_test_condition, instr, "unbound_test_condition", 0, 0, tmp);
                         }
                         else
                             throw err;
@@ -1625,7 +1625,7 @@ class FunctionExecutor {
                 catch (Error err) {
                     if (e == no_return_value) {
                         e = unbound_test_condition;
-                        throw Error(unbound_test_condition, instr, "unbound_test_condition", 0, 0, parameter);
+                        throw Error(unbound_test_condition, instr, "unbound_test_condition", 0, 0, parameter->left);
                     }
                     else
                         throw err;
