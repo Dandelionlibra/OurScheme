@@ -112,8 +112,6 @@ set<string> bulid_in_func = { // only bulid-in function
 unordered_map<string, Node_Token*> defined_table; // store the variable name, value and defined func
 set <Node_Token*> pointer_gather; // store the variable name and value
 bool verbose_mode = true; // verbose mode, default is true
-// bool read_flag = false; // read flag, default is false
-bool write_flag = false; // write flag, default is false
 
 // error message 
 class Error {
@@ -163,7 +161,7 @@ public:
         else if (t == no_return_value || t == no_return_value_inernal)
             message = "ERROR (no return value) : "; // Node_Token* r
         else if (t == unbound_test_condition)
-            message = "ERROR (unbound-test condition) : "; // Node_Token* r
+            message = "ERROR (unbound test condition) : "; // Node_Token* r
         else if (t == unbound_condition)
             message = "ERROR (unbound condition) : "; // Node_Token* r
         else if (t == division_by_zero)
@@ -192,1942 +190,6 @@ void clear_pointer_gather() {
     }
 }
 
-class FunctionExecutor {
-    private:
-    // LexicalAnalyzer Lex; //詞法分析器
-    // SyntaxAnalyzer Syn; //語法分析器
-    int count_args(Node_Token *args) {
-        int count = 0;
-        while (args->left != nullptr) {
-            // cerr << "\033[1;35m" << "args->left: " << args->left->token.value << "\033[0m" << endl;
-            args = args->right;
-            count++;
-        }
-        // cerr << "\033[1;35m" << "count_args: " << count << "\033[0m" << endl;
-        return count;
-    }
-    bool is_ATOM(TokenType type) {
-        // <ATOM> ::= SYMBOL | INT | FLOAT | STRING | NIL | T | Left-PAREN Right-PAREN
-        if (type == SYMBOL || type == INT || type == FLOAT || type == STRING || type == NIL || type == T) // || type == Left_PAREN || type == Right_PAREN
-            return true;
-        // QUOTE、DOT
-        return false;
-    }
-    
-    bool is_reserved_word(string str) {
-        if (bulid_in_func.find(str) != bulid_in_func.end())
-            return true;
-
-        return false;
-    }
-    bool is_equ_address(Node_Token *arg1, Node_Token *arg2) {
-        if (arg1 == nullptr && arg2 == nullptr) 
-            return true;
-        else if (arg1 == nullptr && arg2 != nullptr)
-            return false;
-        else if (arg1 != nullptr && arg2 == nullptr)
-            return false;
-        else if (arg1->token.type == INT || arg1->token.type == FLOAT || arg1->token.type == NIL || arg1->token.type == T) {
-            if (arg1->token.type == arg2->token.type && arg1->token.value == arg2->token.value)
-                return is_equ_address(arg1->left, arg2->left) && is_equ_address(arg1->right, arg2->right);
-            else
-                return false;
-        }
-        else if (arg1 != arg2)
-            return false;
-        else 
-            return is_equ_address(arg1->left, arg2->left) && is_equ_address(arg1->right, arg2->right);
-
-        return is_equ_address(arg1->left, arg2->left) && is_equ_address(arg1->right, arg2->right);
-    }
-    bool is_equ(Node_Token *arg1, Node_Token *arg2) {
-        if (arg1 == nullptr && arg2 == nullptr) 
-            return true;
-        else if (arg1 == nullptr && arg2 != nullptr)
-            return false;
-        else if (arg1 != nullptr && arg2 == nullptr)
-            return false;
-        
-        else if (arg1->token.type != arg2->token.type || arg1->token.value != arg2->token.value)
-            return false;
-        else 
-            return is_equ(arg1->left, arg2->left) && is_equ(arg1->right, arg2->right);
-
-        return is_equ(arg1->left, arg2->left) && is_equ(arg1->right, arg2->right);
-    }
-    Node_Token* sequence(Node_Token *cur, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
-        Node_Token* node = nullptr;
-        while (cur != nullptr && cur->token.type != NIL) {
-            try {
-                node = evalution(cur->left, e, local_defined_table);
-            }
-            catch (Error err) {
-                if (e == no_return_value) { //  || e == no_return_value_inernal
-                    if (cur->right == nullptr || cur->right->token.type == NIL) {
-                        throw Error(no_return_value, cur->left->token.value, "no return value", 0, 0, cur);
-                        // throw err; // If it's the last s-exp
-                    }
-                    else {
-                        // cerr << "\033[1;31m" << "in sequence no return error: " << err.message << "\033[0m" << endl;
-                        // cerr 
-                        e = Error_None; // otherwise, ignore the error
-                        
-                    }
-                }
-                else throw err;
-            }
-            cur = cur->right;
-        }
-        // cerr << "\033[1;35m" << "node: " << node->token.value << "\033[0m" << endl;
-        return node;
-    }
-    public:
-    Node_Token* define_func(string instr, Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
-        vector<Node_Token*> arg_list;
-        int c = count_args(args);
-        if (cur->parent != nullptr){
-            e = error_level_define;
-            throw Error(error_level_define, instr, "DEFINE", 0, 0);
-        }
-        else if (c < 2) {
-            e = error_define_format;
-            throw Error(error_define_format, "DEFINE", "error_define_format", 0, 0, cur);
-        }
-        else if (c > 2 || args->left->token.type == DOT) {
-            if (args->left->token.type == DOT && args->left->left->token.type != QUOTE)  // (define (a) b c)
-                return define_func_more(instr, cur, args, e, local_defined_table);
-            // (define a (b) (c))
-            e = error_define_format;
-            throw Error(error_define_format, "DEFINE", "error_define_format", 0, 0, cur);
-        }
-        else {
-
-            Node_Token *t = args;
-            // ! while (t != nullptr && t->token.type != NIL)
-            for (int i = 0 ; i < 2 ; i++) {
-                Node_Token *parameter = t->left;
-                
-                if (i == 0) {
-                    // cerr << "1.     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1"<<endl;
-                    if (parameter->token.type == SYMBOL) {
-                        // none reserved word
-                        if (is_reserved_word(parameter->token.value)) {
-                            e = error_define_format;
-                            throw Error(error_define_format, "DEFINE", "error_define_format", 0, 0, cur);
-                        }
-                        arg_list.push_back(parameter);
-                    }
-                    else if (is_ATOM(parameter->token.type)) { // || parameter->token.type == DOT
-                        // cerr << "2.     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1"<<endl;
-
-                        e = error_define_format;
-                        throw Error(error_define_format, "DEFINE", "error_define_format", 0, 0, cur);
-                    }
-                }
-                else {
-                    try {
-                        arg_list.push_back(evalution(parameter, e, local_defined_table));
-                    }
-                    catch (Error err) {
-                        // cerr << "\033[1;35m" << "error: " << error << "\033[0m" << endl;
-                        if (e == no_return_value) {
-                            e = no_return_value_inernal;
-                            // throw Error(no_return_value_inernal, instr, "unbound parameter", 0, 0, parameter);
-                            throw Error(no_return_value_inernal, err.current, "no_return_value_inernal", 0, 0, err.root);
-                        }
-                        else
-                            throw err;
-                    }
-                }
-
-                if (i == 1) {
-                    defined_table[arg_list.at(0)->token.value] = arg_list.at(1);
-                    e = defined;
-                    throw Error(defined, arg_list.at(0)->token.value, "defined la la", 0, 0, cur);
-                
-                }
-                
-                t = t->right;
-            }
-            
-            
-        }
-        return nullptr;
-    }
-
-    Node_Token* define_func_more(string instr, Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
-        vector<Node_Token*> arg_list;
-        int c = count_args(args);
-        //                  * <- cur
-        //                /   \
-        //             define  . <- args
-        //                   /   \
-        //                 .       .
-        //                / \     / \
-        //               a  nil expr1 .
-        //                           / \
-        //                       expr2  nil
-
-        Node_Token* func = new Node_Token();
-        pointer_gather.insert(func);
-        func->token.value = args->left->left->token.value; // function name
-        func->token.type = args->left->left->token.type; // function name
-        // cerr << "func->token.value: " << func->token.value << endl;
-        // cerr << "func->token.type: " << func->token.type << endl;
-
-        if (func->token.type == SYMBOL) {
-            // cerr << "func->token.type == SYMBOL" << endl;
-            if (is_reserved_word(func->token.value)) {
-                // cerr << "func->token.type == SYMBOL && is_reserved_word(func->token.value)" << endl;
-                e = error_define_format;
-                throw Error(error_define_format, "DEFINE", "error_define_format", 0, 0, cur);
-            }
-        }
-        else if ( is_ATOM(func->token.type) || func->token.type == DOT || func->token.type == QUOTE) {
-            e = error_define_format;
-            throw Error(error_define_format, "DEFINE", "error_define_format", 0, 0, cur);
-        }
-
-        // cerr << "\033[1;33m" << "set " << func->token.value <<" is_function = true " << "\033[0m" << endl;
-        func->token.is_function = true;
-        func->left = args->left->right; // parameter list, 有可能是nil, none args
-        func->right = args->right; // expression, 有可能有多個 expr
-
-        //                  a <- func
-        //                /   \
-        //              nil     .
-        //                     / \
-        //                  expr1  .
-        //                        / \
-        //                   expr2  nil
-
-        defined_table[func->token.value] = func; // store the function name and function body
-        e = defined;
-        throw Error(defined, func->token.value, "defined la la", 0, 0, cur);
-
-        return nullptr;
-    }
-
-    Node_Token* self_defined_function(string instr, Node_Token *cur, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
-        // cerr << "\033[1;33m" << "--------- enter self_defined_function ---------" << "\033[0m" << endl;
-        Node_Token* node;
-        vector<Node_Token*> arg_list;
-        unordered_map<string, Node_Token*> new_table; // = local_defined_table
-
-        // *defined local variable
-        Node_Token* func_name = cur->left; // function name
-        Node_Token* func_args; // 參數列表
-        Node_Token* func_exprs; // 表達式列表
-        if (local_defined_table.find(func_name->token.value) != local_defined_table.end()) {
-            func_args = local_defined_table[func_name->token.value]->left;
-            func_exprs = local_defined_table[func_name->token.value]->right;
-        }
-        else if (defined_table.find(func_name->token.value) != defined_table.end()) {
-            func_args = defined_table[func_name->token.value]->left;
-            func_exprs = defined_table[func_name->token.value]->right;
-        }
-        else {
-            e = undefined_function;
-            throw Error(undefined_function, func_name->token.value, "undefined function", 0, 0, cur);
-        }
-        
-        Node_Token* args = cur->right;
-        // lambda_args->token.type != NIL && lambda_args != nullptr && defined_args->token.type != NIL && defined_args != nullptr
-        // cerr << "\033[1;32m" << " *** test1 *** "  << "\033[0m" << endl;
-        while (args->token.type != NIL && args != nullptr) {
-            // cerr << "\033[1;35m" << "lambda_args: " << args->left->token.value << "\033[0m" << endl;
-            try {
-                arg_list.push_back(evalution(args->left, e, local_defined_table));
-                // cerr << "\033[1;36m" << "lambda_args: " << args->left->token.value << "\033[0m" << endl;
-                // cerr << "\033[1;36m" << "arg_list: " << arg_list.at(arg_list.size()-1)->token.value << "\033[0m" << endl;
-            }
-            catch (Error err) {
-                // cerr << "\033[1;35m" << "error: " << error << "\033[0m" << endl;
-                if (e == no_return_value) {
-                    e = unbound_parameter;
-                    throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, args->left);
-                }
-                else
-                    throw err;
-            }
-            args = args->right;
-        }
-
-        for (auto arg : arg_list) {
-            if (func_args->token.type == NIL || func_args == nullptr) {
-                e = incorrect_number_of_arguments;
-                string func_name_str;
-                if (defined_table.find(func_name->token.value) != defined_table.end())
-                    func_name_str = defined_table[func_name->token.value]->token.value;
-                else func_name_str = func_name->token.value;
-                
-                throw Error(incorrect_number_of_arguments, func_name_str, "incorrect_number_of_arguments", 0, 0, cur);
-            }
-            new_table[func_args->left->token.value] = arg;
-            func_args = func_args->right;
-        }
-
-        if (func_args->token.type != NIL) {
-            e = incorrect_number_of_arguments;
-            string func_name_str;
-                if (defined_table.find(func_name->token.value) != defined_table.end())
-                    func_name_str = defined_table[func_name->token.value]->token.value;
-                else func_name_str = func_name->token.value;
-
-            throw Error(incorrect_number_of_arguments, func_name_str, "incorrect_number_of_arguments", 0, 0, cur);
-        }
-        // cerr << "\033[1;32m" << " *** test2 *** "  << "\033[0m" << endl;
-        try {
-            node = sequence(func_exprs, e, new_table);
-        }
-        catch (Error err) {
-            if (e == no_return_value) {
-                // e = no_return_value_inernal;
-                throw Error(no_return_value, func_name->token.value, "no return value", 0, 0, cur);
-            }
-            
-            throw err;
-        }
-        return node;
-    }
-
-    Node_Token* cons(string instr, Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
-        Node_Token* node = new Node_Token();
-        pointer_gather.insert(node);
-        vector<Node_Token*> arg_list;
-
-        if (count_args(args) != 2) {
-            e = incorrect_number_of_arguments;
-            throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
-        }
-        else {
-            Node_Token *t = args;
-            while (t != nullptr && t->token.type != NIL) {
-                Node_Token *parameter = t->left;
-                // cerr << "\033[1;35m" << "parameter: " << parameter->token.value << "\033[0m" << endl;
-                try {
-                    arg_list.push_back(evalution(parameter, e, local_defined_table));
-                }
-                catch (Error err) {
-                    // cerr << "\033[1;35m" << "error: " << error << "\033[0m" << endl;
-                    if (e == no_return_value) {
-                        e = unbound_parameter;
-                        throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, parameter);
-                    }
-                    else
-                        throw err;
-                }
-
-                t = t->right;
-            }
-            // Create a new node for the cons cell
-            node->token.type = DOT;
-            node->token.value = ".";
-            node->left = arg_list.at(0);
-            // cerr << "\033[1;35m" << "arg_list.at(0): " << arg_list.at(0)->token.value << "\033[0m" << endl;
-            node->right = arg_list.at(1);
-            // cerr << "\033[1;35m" << "arg_list.at(1): " << arg_list.at(1)->token.value << "\033[0m" << endl;
-        }
-
-        return node;
-    }
-    Node_Token* lambda(Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
-        // cerr << "\033[1;33m" << "--------- enter lambda ---------" << "\033[0m" << endl;
-
-        // cerr << "\033[1;35m" << "cur->left: " << cur->left->token.value << "\033[0m" << endl;
-        if (cur->left->token.value != "lambda" && defined_table.find(cur->left->token.value) != defined_table.end()) {
-            // cerr << "\033[1;35m" << "cur->left: " << cur->left->token.value << "\033[0m" << endl;
-            if (defined_table[cur->left->token.value]->token.is_function) {
-                // Node_Token* func_Token = defined_table[cur->left->token.value];
-                Node_Token* t = defined_table[cur->left->token.value];
-                // cerr << "\033[1;33m" << "--------- judge enter execute_lambda ---------" << "\033[0m" << endl;
-
-                if (t != nullptr && t->token.value == "lambda") {
-                    // cerr << "\033[1;33m" << "--------- enter execute_lambda ---------" << "\033[0m" << endl;
-                    // 若為 lambda function, 則
-                    //                  lambda <- t.token
-                    //                  /    \
-                    //          tmp -> *      * 
-                    //               / \    /   \
-                    //            arg1 *  body1  *
-                    //                / \      /   \
-                    //              arg2 nil  body2 nil
-                    return execute_lambda(t, cur->right, e, local_defined_table); // execute lambda function
-                }
-            }
-        }
-
-        Node_Token* node = new Node_Token();
-        pointer_gather.insert(node);
-        
-        node->token.type = SYMBOL;
-        node->token.value = "lambda";
-        node->token.is_function = true;
-
-
-        if (count_args(args) < 2) { // 兩個以上參數
-            
-            e = error_define_format;
-            // cur->left->token.is_function = false;
-            throw Error(error_define_format, "LAMBDA", "error_define_format", 0, 0, cur);
-        }
-        else if (args->left->token.type != DOT && args->left->token.type != NIL ) { // (lambda x  (y z)) -> error
-            e = error_define_format;
-            throw Error(error_define_format, "LAMBDA", "error_define_format", 0, 0, cur);
-        }
-
-        else {
-            node->left = args->left; // 參數列表
-            node->right = args->right; // expression
-            Node_Token* left_node;
-            if (args->left->token.type == NIL) left_node = nullptr; // ( lambda () (y)( z) ) == ( lambda nil (y)( z) ) == ( lambda #f (y)( z) )
-            else {
-                left_node = node->left;
-                if (left_node->left->token.type == NIL) { // ( lambda (nil) (y)( z) ) == ( lambda (#f) (y)( z) )
-                    e = error_define_format;
-                    throw Error(error_define_format, "LAMBDA", "error_define_format", 0, 0, cur);
-                }
-            }
-
-            while (left_node != nullptr && left_node->token.type != NIL) {
-                if (left_node->left->token.type != SYMBOL) {
-                    if (left_node->left->token.type == DOT)
-                        left_node->left = evalution(left_node->left, e, local_defined_table);
-                    else {
-                        e = error_define_format;
-                        throw Error(error_define_format, "LAMBDA", "error_define_format", 0, 0, cur);
-                    }
-                }
-                // 排除保留字
-                else if (is_reserved_word(left_node->left->token.value)) {
-                    e = error_define_format;
-                    throw Error(error_define_format, "LAMBDA", "error_define_format", 0, 0, cur);
-                }
-                
-                left_node = left_node->right;
-            }
-
-        }
-
-        return node;
-    }
-    Node_Token* execute_lambda(Node_Token *lambda, Node_Token *defined_args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
-        cerr << "\033[1;33m" << "--------- enter execute_lambda ---------" << "\033[0m" << endl;
-        Node_Token* node;
-        vector<Node_Token*> arg_list;
-        unordered_map<string, Node_Token*> new_table; //  = local_defined_table
-
-        int init_c = count_args(lambda->left);
-        int input_c = count_args(defined_args); // lambda args
-        // cerr << "\033[1;35m" << "init_c: " << init_c << "\033[0m" << endl;
-        // cerr << "\033[1;35m" << "input_c: " << input_c << "\033[0m" << endl;
-        if (input_c != init_c) { // 參數量不相同
-            e = incorrect_number_of_arguments;
-            throw Error(incorrect_number_of_arguments, lambda->token.value, "incorrect_number_of_arguments", 0, 0, lambda);
-        }
-        
-        // *defined local variable
-        
-        while (defined_args->token.type != NIL && defined_args != nullptr) {
-            // cerr << "\033[1;35m" << "lambda_args: " << lambda_args->left->token.value << "\033[0m" << endl;
-            arg_list.push_back(evalution(defined_args->left, e, local_defined_table));
-            defined_args = defined_args->right;
-        }
-
-        Node_Token* lambda_args = lambda->left;
-        for (auto arg : arg_list) {
-            if (lambda_args->token.type == NIL || lambda_args == nullptr) {
-                e = incorrect_number_of_arguments;
-                throw Error(incorrect_number_of_arguments, lambda->token.value, "incorrect_number_of_arguments", 0, 0, lambda);
-            }
-            // cerr << "\033[1;31m" << "lambda_args: " << lambda_args->left->token.value << "\033[0m" << endl;
-            // cerr << "\033[1;31m" << "arg: " << arg->token.value << "\033[0m" << endl;
-            new_table[lambda_args->left->token.value] = arg;
-            lambda_args = lambda_args->right;
-        }
-
-        if (lambda_args->token.type != NIL) {
-            e = incorrect_number_of_arguments;
-            throw Error(incorrect_number_of_arguments, lambda->token.value, "incorrect_number_of_arguments", 0, 0, lambda);
-        }
-
-        
-        return sequence(lambda->right, e, new_table);
-    }
-    
-    Node_Token* let(string instr, Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
-        // cerr << "\033[1;33m" << "--------- enter let ---------" << "\033[0m" << endl;
-        Node_Token* node;
-        // pointer_gather.insert(node);
-        // vector<Node_Token*> arg_list;
-        unordered_map<string, Node_Token*> new_table = local_defined_table;
-        
-        
-        if (count_args(args) < 2) { // 兩個以上參數
-            // cerr << "\033[1;35m" << "error: 1. error_define_format\033[0m" << endl;
-            e = error_define_format;
-            // cur->left->token.is_function = false;
-            throw Error(error_define_format, "LET", "error_define_format", 0, 0, cur);
-        }
-        
-        Node_Token* first_arg = args->left;
-        if (first_arg->token.type != DOT && first_arg->token.type != NIL) { // 第一個參數必須是 expression
-            e = error_define_format;
-            throw Error(error_define_format, "LET", "error_define_format", 0, 0, cur);
-        }
-
-
-        while (first_arg != nullptr && first_arg->token.type != NIL) {
-            Node_Token* tmp = first_arg->left;
-            if (tmp == nullptr || tmp->token.type != DOT || tmp->left->token.type != SYMBOL) {
-                e = error_define_format;
-                throw Error(error_define_format, "LET", "error_define_format", 0, 0, cur);
-            }
-            // else
-            if (is_reserved_word(tmp->left->token.value)) {
-                e = error_define_format;
-                throw Error(error_define_format, "LET", "error_define_format", 0, 0, cur);
-            }
-
-            if (count_args(tmp) != 2) { // (x 1 2) -> error, (x 1) -> ok
-                e = error_define_format;
-                throw Error(error_define_format, "LET", "error_define_format", 0, 0, cur);
-            }
-            first_arg = first_arg->right;
-        }
-        
-        // 對區域變數進行綁定
-        first_arg = args->left;
-        while (first_arg != nullptr && first_arg->token.type != NIL) {
-            Node_Token* tmp = first_arg->left;
-
-            try {
-                // cerr << "\033[1;35m" << "4. arg: " << tmp->left->token.value << "\033[0m" << endl;
-                new_table[tmp->left->token.value] = evalution(tmp->right->left, e, local_defined_table);
-            }
-            catch (Error err) {
-                // cerr << "\033[1;31m" << "******* 1. let error *******" << "\033[0m" << endl;
-                if (e == no_return_value) {
-                    e = no_return_value_inernal;
-                    throw Error(no_return_value_inernal, err.current, "no_return_value_inernal", 0, 0, err.root); // arg->right->left
-                    // throw Error(no_return_value, instr, "no_return_value", 0, 0, cur); // arg->right->left
-                }
-                throw err;
-            }
-            
-            first_arg = first_arg->right;
-        }
-
-        Node_Token* other_arg = args->right;
-
-        try {
-            node = sequence(other_arg, e, new_table);
-        }
-        catch (Error err) {
-            if (e == no_return_value) {
-                // e = no_return_value_inernal;
-                throw Error(no_return_value, other_arg->token.value, "no return value", 0, 0, cur);
-            }
-            
-            throw err;
-        }
-        return node;
-        /*
-        while (other_arg != nullptr && other_arg->token.type != NIL) {
-            Node_Token* arg = other_arg->left;
-            try {
-                node = evalution(arg, e, new_table);
-            }
-            catch (Error err) {
-                // cerr << "\033[1;31m" << "******* 2. let error *******" << "\033[0m" << endl;
-                if (e == no_return_value) {
-                    if (other_arg->right == nullptr || other_arg->right->token.type == NIL){
-                        // e = no_return_value_inernal;
-                        throw Error(no_return_value, instr, "no_return_value", 0, 0, cur); // arg->right->left
-                        // throw err; // If it's the last s-exp
-                    }
-                    else e = Error_None; // otherwise, ignore the error
-                }
-                else
-                    throw err;
-            }
-
-            other_arg = other_arg->right;
-        }*/
-
-        
-
-        // return node;
-    }
-    // ! (list '(4 5))
-    Node_Token* list_func(string instr, Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
-        Node_Token* node = new Node_Token();
-        pointer_gather.insert(node);
-        node->token.type = DOT;
-        node->token.value = ".";
-
-        if (count_args(args) < 1) {
-            // throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
-            node->token.type = NIL;
-            node->token.value = "#f";
-            return node;
-        }
-        else {
-            Node_Token* current = node;
-            Node_Token* head = node;
-
-            while (args != nullptr && args->token.type != NIL) {
-                Node_Token* parameter = args->left;
-                Node_Token* evaluated = nullptr;
-
-                try {
-                    evaluated = evalution(parameter, e, local_defined_table);
-                }
-                catch (Error err) {
-                    if (e == no_return_value) {
-                        e = unbound_parameter;
-                        throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, parameter);
-                    }
-                    else
-                        throw err;
-                }
-
-                current->left = evaluated;
-                if (args->right != nullptr && args->right->token.type != NIL) {
-                    Node_Token* next = new Node_Token();
-                    pointer_gather.insert(next);
-                    next->token.type = DOT;
-                    next->token.value = ".";
-                    current->right = next;
-                    current = next;
-                }
-                else {
-                    current->right = new Node_Token();
-                    pointer_gather.insert(current->right);
-                    current->right->token.type = NIL;
-                    current->right->token.value = "#f";
-                }
-
-                args = args->right;
-            }
-
-            return head;
-        }
-    }
-    Node_Token* car(string instr, Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
-        if (count_args(args) != 1) {
-            e = incorrect_number_of_arguments;
-            throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
-        }
-        else {
-            Node_Token *parameter = args->left;
-            try {
-                parameter = evalution(args->left, e, local_defined_table);
-            }
-            catch (Error err) {
-                if (e == no_return_value) {
-                    e = unbound_parameter;
-                    throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, parameter);
-                }
-                else
-                    throw err;
-            }
-
-            if (parameter->token.type != DOT) {
-                e = incorrect_argument_type;
-                throw Error(incorrect_argument_type, instr, parameter->token.value, 0, 0, parameter);
-            }
-            else 
-                return parameter->left;
-            
-        }
-
-        // return nullptr;
-    }
-    Node_Token* cdr(string instr, Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
-        if (count_args(args) != 1) {
-            e = incorrect_number_of_arguments;
-            throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
-        }
-        else {
-            Node_Token *parameter = args->left;
-            try {
-                parameter = evalution(args->left, e, local_defined_table);
-            }
-            catch (Error err) {
-                if (e == no_return_value) {
-                    e = unbound_parameter;
-                    throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, parameter);
-                }
-                else
-                    throw err;
-            }
-
-            if (is_ATOM(parameter->token.type)) {
-                e = incorrect_argument_type;
-                throw Error(incorrect_argument_type, instr, parameter->token.value, 0, 0, parameter);
-            }
-            else 
-                return parameter->right;
-            
-        }
-    }
-    
-    Node_Token* judge_elements(string instr, Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
-        Node_Token* node = new Node_Token();
-        pointer_gather.insert(node);
-        node->token.value = "#f";
-        node->token.type = NIL;
-
-        if (count_args(args) != 1) {
-            e = incorrect_number_of_arguments;
-            throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
-        }
-        else {
-            
-            if (args != nullptr && args->token.type != NIL) {
-                Node_Token *parameter = args->left;
-                try {
-                    parameter = evalution(args->left, e, local_defined_table);
-                }
-                catch (Error err) {
-                    if (e == no_return_value) {
-                        e = unbound_parameter;
-                        throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, parameter);
-                    }
-                    else
-                        throw err;
-                }
-                if (instr == "atom?") {
-                    if (is_ATOM(parameter->token.type)) {
-                        node->token.value = "#t";
-                        node->token.type = T;
-                    }
-                }
-                else if (instr == "pair?") {
-                    if (parameter->token.type == DOT) {
-                        node->token.value = "#t";
-                        node->token.type = T;
-                    }
-                }
-                else if (instr == "list?") {
-                    if (parameter->token.type == DOT) {
-                        Node_Token *tmp = parameter;
-                        while (tmp->right != nullptr)
-                            tmp = tmp->right;
-                        
-                        if (tmp->token.type == NIL) {
-                            node->token.value = "#t";
-                            node->token.type = T;
-                        }
-                        
-                    }
-                }
-                else if (instr == "null?") {
-                    if (parameter->token.type == NIL) {
-                        node->token.value = "#t";
-                        node->token.type = T;
-                    }
-                }
-                else if (instr == "integer?") {
-                    if (parameter->token.type == INT) {
-                        node->token.value = "#t";
-                        node->token.type = T;
-                    }
-                }
-                else if (instr == "real?" || instr == "number?") {
-                    if (parameter->token.type == INT || parameter->token.type == FLOAT) {
-                        node->token.value = "#t";
-                        node->token.type = T;
-                    }
-                }
-                else if (instr == "string?") {
-                    if (parameter->token.type == STRING) {
-                        node->token.value = "#t";
-                        node->token.type = T;
-                    }
-                }
-                else if (instr == "boolean?") {
-                    if (parameter->token.type == T || parameter->token.type == NIL) {
-                        node->token.value = "#t";
-                        node->token.type = T;
-                    }
-                }
-                else if (instr == "symbol?") {
-                    if (parameter->token.type == SYMBOL) {
-                        node->token.value = "#t";
-                        node->token.type = T;
-                    }
-                }
-
-            }
-            
-        }
-        return node;
-    }
-    
-    // (/ + - -)
-    // > ERROR (/ with incorrect argument type) : #<procedure +>
-    Node_Token* implement_arithmetic(string instr, Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
-        Node_Token* node = new Node_Token();
-        pointer_gather.insert(node);
-        vector<Node_Token*> arg_list;
-        bool float_flag = false;
-
-        if (count_args(args) < 2) {
-            e = incorrect_number_of_arguments;
-            throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
-        }
-        else {
-            Node_Token *t = args;
-            while (t != nullptr && t->token.type != NIL) {
-                Node_Token *parameter = t->left;
-                try {
-                    arg_list.push_back(evalution(parameter, e, local_defined_table));
-                }
-                catch (Error err) {
-                    if (e == no_return_value) {
-                        if (parameter->left->token.type == DOT)
-                            throw err;
-                        e = unbound_parameter;
-                        throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, parameter);
-                    }
-                    else
-                        throw err;
-                }
-
-                if (arg_list.back()->token.type == FLOAT)
-                    float_flag = true;
-                else if (arg_list.back()->token.type == DOT) {
-                    e = incorrect_argument_type;
-                    throw Error(incorrect_argument_type, instr, "incorrect_argument_type", 0, 0, arg_list.back());
-                }
-                else if (arg_list.back()->token.type != INT && arg_list.back()->token.type != FLOAT) {
-                    e = incorrect_argument_type;
-                    throw Error(incorrect_argument_type, instr, arg_list.back()->token.value, 0, 0, arg_list.back());
-                }
-
-                t = t->right;
-            }
-        }
-
-        if (float_flag) {
-            double sum = stod(arg_list.at(0)->token.value);
-            for (int i = 1 ; i < arg_list.size() ; i++) {
-                if (instr == "+")
-                    sum += stod(arg_list.at(i)->token.value);
-                else if (instr == "-")
-                    sum -= stod(arg_list.at(i)->token.value);
-                else if (instr == "*")
-                    sum *= stod(arg_list.at(i)->token.value);
-                else if (instr == "/") {
-                    double divisor = stod(arg_list.at(i)->token.value);
-                    if (divisor == 0.0) {
-                        e = division_by_zero;
-                        throw Error(division_by_zero, "/", "division by zero", 0, 0);
-                    }
-                    sum /= divisor;
-                }
-            }
-            node->token.value = to_string(sum);
-            node->token.type = FLOAT;
-        }
-        else {
-            int sum = stoi(arg_list.at(0)->token.value);
-            for (int i = 1 ; i < arg_list.size() ; i++) {
-                if (instr == "+")
-                    sum += stoi(arg_list.at(i)->token.value);
-                else if (instr == "-")
-                    sum -= stoi(arg_list.at(i)->token.value);
-                else if (instr == "*")
-                    sum *= stoi(arg_list.at(i)->token.value);
-                else if (instr == "/") {
-                    double divisor = stoi(arg_list.at(i)->token.value);
-                    if (divisor == 0.0) {
-                        e = division_by_zero;
-                        throw Error(division_by_zero, "/", "division by zero", 0, 0);
-                    }
-                    sum /= divisor;
-                }
-                
-            }
-            node->token.value = to_string(sum);
-            node->token.type = INT;
-        }
-
-        return node;
-    }
-
-    Node_Token* implement_logical(string instr, Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
-        Node_Token* node = new Node_Token();
-        pointer_gather.insert(node);
-        vector<Node_Token*> arg_list;
-        node->token.value = "#t";
-        node->token.type = T;
-
-        if (instr == "not" && count_args(args) != 1) {
-            e = incorrect_number_of_arguments;
-            throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
-        }
-        else if ((instr == "and" || instr == "or") && count_args(args) < 2) {
-            e = incorrect_number_of_arguments;
-            throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
-        }
-        else {
-            Node_Token *t = args;
-            while (t != nullptr && t->token.type != NIL) {
-                Node_Token *parameter = t->left;
-                try {
-                    arg_list.push_back(evalution(parameter, e, local_defined_table));
-                    if (instr == "not") {
-                        if (arg_list.back()->token.type != NIL) {
-                            node->token.value = "#f";
-                            node->token.type = NIL;
-                        }
-                    }
-                    /*
-                    第一個被計算為 nil 則回傳 nil
-                    如果不是 nil 則回傳最後一個計算出的值
-                    */
-                    else if (instr == "and") {
-                        if (arg_list.back()->token.type == NIL)
-                            return arg_list.back();
-                        else 
-                            node = arg_list.back();
-                    }
-                    /* 
-                    第一個被計算為非 nil 則直接回傳
-                    如果前面都是 nil 則回傳最後一個的值
-                    */
-                    else if (instr == "or") {
-                        if (arg_list.back()->token.type != NIL)
-                            return arg_list.back();
-                        else
-                            node = arg_list.back();
-                    }
-                }
-                catch (Error err) {
-                    if (e == no_return_value) {
-                        e = unbound_condition; // unbound condition
-                        throw Error(unbound_condition, instr, "unbound condition", 0, 0, parameter);
-                    }
-                    else
-                        throw err;
-                }
-
-                t = t->right;
-            }
-        }
-
-        return node;
-    }
-
-    Node_Token* compare_func(string instr, Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
-        Node_Token* node = new Node_Token();
-        pointer_gather.insert(node);
-        vector<Node_Token*> arg_list;
-        bool float_flag = false;
-        node->token.value = "#t";
-        node->token.type = T;
-
-        if (count_args(args) < 2) {
-            e = incorrect_number_of_arguments;
-            throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
-        }
-        else {
-            Node_Token *t = args;
-            while (t != nullptr && t->token.type != NIL) {
-                Node_Token *parameter = t->left;
-                try {
-                    arg_list.push_back(evalution(parameter, e, local_defined_table));
-                }
-                catch (Error err) {
-                    if (e == no_return_value) {
-                        e = unbound_parameter;
-                        throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, parameter);
-                    }
-                    else
-                        throw err;
-                }
-
-                if(arg_list.back()->token.type == FLOAT)
-                    float_flag = true;
-                else if (arg_list.back()->token.type != INT && arg_list.back()->token.type != FLOAT) {
-                    // ERROR (+ with incorrect argument type) : #t
-                    e = incorrect_argument_type;
-                    throw Error(incorrect_argument_type, instr, arg_list.back()->token.value, 0, 0, arg_list.back());
-                }
-                t = t->right;
-            }
-        }
-
-        if (float_flag) {
-            double current = stod(arg_list.at(0)->token.value);
-            for (int i = 1 ; i < arg_list.size() ; i++) {
-                if (instr == "=") {
-                    if (current != stod(arg_list.at(i)->token.value)) {
-                        node->token.value = "#f";
-                        node->token.type = NIL;
-                        return node;
-                    }
-                }
-                else if (instr == "<") {
-                    if (current >= stod(arg_list.at(i)->token.value)) {
-                        node->token.value = "#f";
-                        node->token.type = NIL;
-                        return node;
-                    }
-                }
-                else if (instr == ">") {
-                    if (current <= stod(arg_list.at(i)->token.value)) {
-                        node->token.value = "#f";
-                        node->token.type = NIL;
-                        return node;
-                    }
-                }
-                else if (instr == "<=") {
-                    if (current > stod(arg_list.at(i)->token.value)) {
-                        node->token.value = "#f";
-                        node->token.type = NIL;
-                        return node;
-                    }
-                }
-                else if (instr == ">=") {
-                    if (current < stod(arg_list.at(i)->token.value)) {
-                        node->token.value = "#f";
-                        node->token.type = NIL;
-                        return node;
-                    }
-                }
-                current = stod(arg_list.at(i)->token.value);
-            }
-        }
-        else {
-            int current = stoi(arg_list.at(0)->token.value);
-            for (int i = 1 ; i < arg_list.size() ; i++) {
-                if (instr == "=") {
-                    if (current != stoi(arg_list.at(i)->token.value)) {
-                        node->token.value = "#f";
-                        node->token.type = NIL;
-                        return node;
-                    }
-                }
-                else if (instr == "<") {
-                    if (current >= stoi(arg_list.at(i)->token.value)) {
-                        node->token.value = "#f";
-                        node->token.type = NIL;
-                        return node;
-                    }
-                }
-                else if (instr == ">") {
-                    if (current <= stoi(arg_list.at(i)->token.value)) {
-                        node->token.value = "#f";
-                        node->token.type = NIL;
-                        return node;
-                    }
-                }
-                else if (instr == "<=") {
-                    if (current > stoi(arg_list.at(i)->token.value)) {
-                        node->token.value = "#f";
-                        node->token.type = NIL;
-                        return node;
-                    }
-                }
-                else if (instr == ">=") {
-                    if (current < stoi(arg_list.at(i)->token.value)) {
-                        node->token.value = "#f";
-                        node->token.type = NIL;
-                        return node;
-                    }
-                }
-                current = stoi(arg_list.at(i)->token.value);
-            }
-        }
-
-        return node;
-    }
-    Node_Token* str_operator(string instr, Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
-        Node_Token* node = new Node_Token();
-        pointer_gather.insert(node);
-        vector<Node_Token*> arg_list;
-        node->token.value = "#t";
-        node->token.type = T;
-
-        if (count_args(args) < 2) {
-            e = incorrect_number_of_arguments;
-            throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
-        }
-        else {
-            Node_Token *t = args;
-            while (t != nullptr && t->token.type != NIL) {
-                Node_Token *parameter = t->left;
-                // cerr << "\033[1;35m" << "parameter: " << parameter->token.value << "\033[0m" << endl;
-                try {
-                    arg_list.push_back(evalution(parameter, e, local_defined_table));
-                    if (arg_list.back()->token.type != STRING) {
-                        e = incorrect_argument_type;
-                        throw Error(incorrect_argument_type, instr, arg_list.back()->token.value, 0, 0, arg_list.back());
-                    }
-                }
-                catch (Error err) {
-                    if (e == no_return_value) {
-                        e = unbound_parameter;
-                        throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, parameter);
-                    }
-                    else
-                        throw err;
-                }
-                t = t->right;
-            }
-        }
-
-        for (int i = 0 ; i < arg_list.size() ; i++) {
-            if (instr == "string-append") {
-                if (i == 0) {
-                    node->token.value = arg_list.at(i)->token.value.substr(1, arg_list.at(i)->token.value.size() - 2);
-                    node->token.type = STRING;
-                }
-                else node->token.value += arg_list.at(i)->token.value.substr(1, arg_list.at(i)->token.value.size() - 2);
-
-                if (i == arg_list.size()-1)
-                    node->token.value = "\"" + node->token.value + "\"";
-                
-            }
-            else if (instr == "string>?") {
-                if (i == 0) continue;
-                else {
-                    for (int j = 0 ; j < arg_list.at(i-1)->token.value.size() && j < arg_list.at(i)->token.value.size() ; j++) {
-                        if (arg_list.at(i-1)->token.value[j] < arg_list.at(i)->token.value[j]) {
-                            node->token.value = "#f";
-                            node->token.type = NIL;
-                            return node;
-                        }
-                        else if (arg_list.at(i-1)->token.value[j] > arg_list.at(i)->token.value[j])
-                            break;
-                        
-                    }
-                    if (arg_list.at(i-1)->token.value.size() <= arg_list.at(i)->token.value.size() &&
-                        arg_list.at(i-1)->token.value == arg_list.at(i)->token.value.substr(0, arg_list.at(i-1)->token.value.size())) {
-                        node->token.value = "#f";
-                        node->token.type = NIL;
-                        return node;
-                    }
-                }
-                
-            }
-            else if (instr == "string<?") {
-                if (i == 0) continue;
-                else {
-                    for (int j = 0 ; j < arg_list.at(i-1)->token.value.size() && j < arg_list.at(i)->token.value.size() ; j++) {
-                        if (arg_list.at(i-1)->token.value[j] > arg_list.at(i)->token.value[j]) {
-                            node->token.value = "#f";
-                            node->token.type = NIL;
-                            return node;
-                        }
-                        else if (arg_list.at(i-1)->token.value[j] < arg_list.at(i)->token.value[j])
-                            break;
-                        
-                    }
-                    if (arg_list.at(i-1)->token.value.size() >= arg_list.at(i)->token.value.size() &&
-                        arg_list.at(i-1)->token.value == arg_list.at(i)->token.value.substr(0, arg_list.at(i-1)->token.value.size())) {
-                        node->token.value = "#f";
-                        node->token.type = NIL;
-                        return node;
-                    }
-                    
-                }
-            }
-            else if (instr == "string=?") {
-                if (i == 0) continue;
-                else if (arg_list.at(i)->token.value != arg_list.at(i-1)->token.value) {
-                    node->token.value = "#f";
-                    node->token.type = NIL;
-                    return node;
-                }
-            }
-        }
-
-        return node;
-    }
-
-    Node_Token* eqv(string instr, Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
-        Node_Token* node = new Node_Token();
-        pointer_gather.insert(node);
-        vector<Node_Token*> arg_list;
-        node->token.value = "#t";
-        node->token.type = T;
-
-        if (count_args(args) != 2) {
-            e = incorrect_number_of_arguments;
-            throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
-        }
-        else {
-            Node_Token *t = args;
-            while (t != nullptr && t->token.type != NIL) {
-                Node_Token *parameter = t->left;
-                try {
-                    arg_list.push_back(evalution(parameter, e, local_defined_table));
-                }
-                catch (Error err) {
-                    if (e == no_return_value) {
-                        e = unbound_parameter;
-                        throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, parameter);
-                    }
-                    else
-                        throw err;
-                }
-                t = t->right;
-            }
-        }
-
-        if (!is_equ_address(arg_list.at(0), arg_list.at(1))) {
-            node->token.value = "#f";
-            node->token.type = NIL;
-        }
-
-        return node;
-    }
-    Node_Token* equal(string instr, Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
-        Node_Token* node = new Node_Token();
-        pointer_gather.insert(node);
-        vector<Node_Token*> arg_list;
-        node->token.value = "#t";
-        node->token.type = T;
-
-        if (count_args(args) != 2) {
-            e = incorrect_number_of_arguments;
-            throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
-        }
-        else {
-            Node_Token *t = args;
-            while (t != nullptr && t->token.type != NIL) {
-                Node_Token *parameter = t->left;
-                try {
-                    arg_list.push_back(evalution(parameter, e, local_defined_table));
-                }
-                catch (Error err) {
-                    if (e == no_return_value) {
-                        e = unbound_parameter;
-                        throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, parameter);
-                    }
-                    else
-                        throw err;
-                }
-                t = t->right;
-            }
-        }
-        
-        if (!is_equ(arg_list.at(0), arg_list.at(1))) {
-            node->token.value = "#f";
-            node->token.type = NIL;
-        }
-
-        return node;
-    }
-    Node_Token* begin_func(string instr, Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
-        Node_Token* node;
-        vector<Node_Token*> arg_list;
-
-        if (count_args(args) < 1) {
-            e = incorrect_number_of_arguments;
-            throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
-        }
-        else {
-            // Return the last evaluated argument
-            try {
-                return sequence(args, e, local_defined_table);
-            }
-            catch (Error err) {
-                cerr << "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!" << endl;
-                if (e == no_return_value) {
-                    throw Error(no_return_value, instr, "unbound parameter", 0, 0, cur);
-                }
-                else
-                    throw err;
-                
-            }
-        }
-
-
-    }
-
-    Node_Token* if_func(string instr, Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
-        vector<Node_Token*> arg_list;
-
-        int c = count_args(args);
-        if (c != 2 && c != 3) {
-            e = incorrect_number_of_arguments;
-            throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
-        }
-        else {
-            // (if 條件式 判斷式 判斷式)
-            Node_Token *judge_elements;
-            
-            try {
-                judge_elements = evalution(args->left, e, local_defined_table);
-                // cout << "\033[1;35m" << "judge_elements: " << judge_elements->token.value << "\033[0m" << endl;
-                // cout << "\033[1;35m" << "judge_elements type: " << judge_elements->token.type << "\033[0m" << endl;
-            }
-            catch (Error err) {
-                if (e == no_return_value) { // 條件式為 no_return_value 回傳 unbound_test_condition
-                    e = unbound_test_condition;
-                    throw Error(unbound_test_condition, instr, "unbound_test_condition", 0, 0, args->left);
-                }
-                else
-                    throw err;
-            }
-            
-            Node_Token *exp = args->right;
-            // while (exp != nullptr && exp->token.type != NIL) {
-            Node_Token *ans;
-            if (c == 2) { 
-                cerr << "\033[1;31m" << "c == 2" << "\033[0m" << endl;
-                // try {
-                //     ans = evalution(exp->left, e, local_defined_table);
-                // }
-                // catch (Error err) {
-                //     throw err;
-                // }
-
-                if (judge_elements->token.type == NIL) {
-                    e = no_return_value;
-                    throw Error(no_return_value, instr, "no_return_value", 0, 0, cur);
-                }
-                // else return ans; // 直接 return right 的執行結果
-                return evalution(exp->left, e, local_defined_table);
-            }
-            else if (c == 3) {
-                cerr << "\033[1;31m" << "c == 3" << "\033[0m" << endl;
-                try {
-                    if (judge_elements->token.type != NIL) {
-                        ans = evalution(exp->left, e, local_defined_table);
-                        return ans;
-                    }
-                    else {
-                        ans = evalution(exp->right->left, e, local_defined_table);
-                        return ans;
-                    } 
-                }
-                catch (Error err) {
-                    throw err;
-                }
-
-            }
-
-        }
-
-        return nullptr;
-    }
-    Node_Token* cond_func(string instr, Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
-        Node_Token* node = new Node_Token();
-        pointer_gather.insert(node);
-
-        int c = count_args(args);
-        if (count_args(args) < 1) {
-            e = error_define_format;
-            throw Error(error_define_format, instr, "cond_func", 0, 0, cur);
-        }
-        
-        Node_Token *t = args;
-        while (t != nullptr && t->token.type != NIL) {
-            int h = 0;
-            if (is_ATOM(t->left->token.type)) {
-                e = error_define_format;
-                throw Error(error_define_format, instr, "cond_func", 0, 0, cur);
-            }
-            else {
-                Node_Token *tmp = t->left;
-                while (tmp != nullptr && tmp->token.type != NIL) {
-                    h++; // increment height
-                    tmp = tmp->right;
-                }
-                if (h < 2) {
-                    e = error_define_format;
-                    throw Error(error_define_format, instr, "cond_func", 0, 0, cur);
-                }
-            }
-            t = t->right;
-        }
-
-        t = args;
-        while (t != nullptr && t->token.type != NIL) {
-            Node_Token *parameter = t->left;
-
-            // 判斷最後的 argument
-            if (t->right->token.type == NIL) {
-                // cerr << "\033[1;35m" << "last argument: " << parameter->left->token.value << "\033[0m" << endl;
-                // try {
-                Node_Token* tmp = parameter->left;
-                if (parameter->left->token.type == DOT) {
-                    try {
-                        tmp = evalution(parameter->left, e, local_defined_table); // 這邊要 evalution 參數的左邊，設 tmp 為了避免改到原本的樹
-                    }
-                    catch (Error err) {
-                        if (err.type == no_return_value) {
-                            e = unbound_test_condition;
-                            throw Error(unbound_test_condition, instr, "unbound_test_condition", 0, 0, parameter->left);
-                        }
-                        // else
-                        throw err;
-                    }
-                    
-                }
-                    
-                if (tmp->token.type == SYMBOL && tmp->token.value == "else") {
-                    cerr << "\033[1;36m" << "--------------------- enter else -------------------: " << "\033[0m" << endl;
-                    return sequence(parameter->right, e, local_defined_table); // 直接 return right 的執行結果
-                }
-                else {// 非 else
-                    Node_Token* success;
-                    try {
-                        success = evalution(tmp, e, local_defined_table);
-                    }
-                    catch (Error err) { // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-                        if (e == no_return_value) {
-                            e = unbound_test_condition;
-                            throw Error(unbound_test_condition, instr, "unbound_test_condition", 0, 0, tmp);
-                        }
-                        else
-                            throw err;
-                    }
-                    
-                    // cerr << "\033[1;31m" << "success: " << success->token.value << "\033[0m" << endl;
-                    // cerr << "\033[1;31m" << "success: " << success->token.type << "\033[0m" << endl;
-                    if (success->token.type != NIL)
-                        return sequence(parameter->right, e, local_defined_table);
-                }
-
-            }
-            // 非最後的 argument
-            else {
-                // 可執行
-                Node_Token* success = nullptr;
-                try {
-                    success = evalution(parameter->left, e, local_defined_table);
-                }
-                catch (Error err) {
-                    if (e == no_return_value) {
-                        e = unbound_test_condition;
-                        throw Error(unbound_test_condition, instr, "unbound_test_condition", 0, 0, parameter->left);
-                    }
-                    else
-                        throw err;
-                }
-                if (success->token.type != NIL) {
-                    cerr << "\033[1;31m" << "success: " << success->token.value << "\033[0m" << endl;
-                    return sequence(parameter->right, e, local_defined_table); // 直接 return right 的執行結果
-                }
-            }
-
-
-            t = t->right;
-        }
-        e = no_return_value;
-        throw Error(no_return_value, instr, "no_return_value", 0, 0, cur);
-    }
-    Node_Token* clean_environment(Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
-        if (cur->parent != nullptr){
-            e = error_level_cleaned;
-            throw Error(error_level_cleaned, "CLEAN-ENVIRONMENT", "CLEAN-ENVIRONMENT", 0, 0);
-        }
-        else if (count_args(args) != 0) {
-            e = incorrect_number_of_arguments;
-            throw Error(incorrect_number_of_arguments, "clean-environment", "incorrect_number_of_arguments", 0, 0);
-        }
-        else {
-            // func.clear();
-            defined_table.clear();
-            clear_pointer_gather();
-            e = cleaned;
-            throw Error(cleaned, "environment cleaned", "lalala", 0, 0);
-        }
-        return nullptr;
-    }
-
-    Node_Token* quote_func(Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
-        if (count_args(args) != 1) {
-            e = incorrect_number_of_arguments;
-            throw Error(incorrect_number_of_arguments, "quote", "incorrect_number_of_arguments", 0, 0);
-        }
-        else 
-            return args->left; // Directly return the quoted expression as is
-        
-    }
-    Node_Token* exit_func(Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
-        if (cur->parent != nullptr){
-            e = error_level_exit;
-            throw Error(error_level_exit, "EXIT", "EXIT", 0, 0);
-        }
-        else if (count_args(args) != 0) {
-            e = incorrect_number_of_arguments;
-            throw Error(incorrect_number_of_arguments, "exit", "incorrect_number_of_arguments", 0, 0);
-        }
-        else {
-            e = UNEXPECTED_EXIT;
-            throw Error(UNEXPECTED_EXIT, "exit", "exit", 0, 0);
-        }
-        return nullptr;
-    }
-
-    Node_Token* verbose_func(string instr, Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
-        Node_Token* node = new Node_Token();
-        pointer_gather.insert(node);
-        node->token.value = "#t";
-        node->token.type = T;
-
-        if (instr == "verbose") {
-            if (count_args(args) != 1) {
-                e = incorrect_number_of_arguments;
-                throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
-            }
-            else {
-                Node_Token *parameter = args->left;
-                try {
-                    Node_Token* left = evalution(parameter, e, local_defined_table);
-                    if (left->token.type == NIL) {
-                        verbose_mode = false;
-                        node->token.value = "#f";
-                        node->token.type = NIL;
-                    }
-                    else verbose_mode = true;
-                }
-                catch (Error err) {
-                    if (e == no_return_value) {
-                        e = unbound_parameter;
-                        throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, parameter);
-                    }
-                    else
-                        throw err;
-                }
-            }
-        }
-        else if (instr == "verbose?") {
-            if (count_args(args) != 0) {
-                e = incorrect_number_of_arguments;
-                throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
-            }
-            else {
-                if (!verbose_mode) {
-                    node->token.value = "#f";
-                    node->token.type = NIL;
-                }
-            }
-        }
-        return node;
-    }
-    
-    Node_Token* err_obj(string instr, Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
-        Node_Token* node = new Node_Token();
-        pointer_gather.insert(node);
-        node->token.value = "#t";
-        node->token.type = T;
-
-        if (count_args(args) != 1) {
-            e = incorrect_number_of_arguments;
-            throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
-        }
-
-        Node_Token *parameter;
-        try{
-            parameter = evalution(args->left, e, local_defined_table);
-        }
-        catch (Error err) {
-            if (e == no_return_value) {
-                e = unbound_parameter;
-                throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, args->left);
-            }
-            else
-                throw err;
-        }
-
-        if (instr == "create-error-object") {
-            if (parameter->token.type != STRING) {
-                e = incorrect_argument_type;
-                throw Error(incorrect_argument_type, instr, parameter->token.value, 0, 0, parameter);
-            }
-
-            node->token.value = parameter->token.value;
-            node->token.type = USERERROR;
-            node->token.is_function = false;
-            node->left = nullptr;
-            node->right = nullptr;
-            node->parent = nullptr;
-
-        }
-        else if (instr == "error-object?") {
-            if (parameter->token.type != USERERROR) {
-                node->token.value = "#f";
-                node->token.type = NIL;
-            }
-        }
-
-        return node;
-
-    }
-    // read: reads the next S-expression from input and returns it as a Node_Token.
-    // If any input error occurs, returns an error object (type USERERROR, value is error message string).
-    Node_Token* read(Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
-        if (count_args(args) != 0) {
-            e = incorrect_number_of_arguments;
-            throw Error(incorrect_number_of_arguments, "read", "incorrect_number_of_arguments", 0, 0);
-        }
-        Node_Token* node = new Node_Token();
-        pointer_gather.insert(node);
-        // LexicalAnalyzer Lex; //詞法分析器
-        // SyntaxAnalyzer Syn; //語法分析器
-
-        bool is_exit = false;
-        /*
-        bool finish_input = false;
-        try {
-            // cout << "\n> ";
-            errorType E = Error_None;
-            Lex.Get_Token(finish_input, E);
-
-            if (finish_input) {
-                // cerr << "\033[1;32mfinish_input\033[0m" << endl;
-                // bulid parser tree
-                cerr << "\033[1;34menter build_tree\033[0m" << endl;
-                Syn.build_tree(Lex.tokenBuffer);
-                Syn.set_root();
-                cerr << "\033[1;34mend build_tree\033[0m" << endl;
-                // Syn.print(); // !Debug
-
-                Lex.reset(); // reset lexical vector
-            }
-
-        } catch (Error e) {
-            switch (e.type) {
-                case UNEXPECTED_TOKEN:
-                    cerr << "\033[1;31m" << "UNEXPECTED_TOKEN" << "\033[0m" << endl;
-                    cout << e.message << endl;
-                    Lex.reset();
-                    break;
-                case UNEXPECTED_CLOSE_PAREN:
-                    cerr << "\033[1;31m" << "UNEXPECTED_CLOSE_PAREN" << "\033[0m" << endl;
-                    cout << e.message << endl;
-                    Lex.reset();
-                    break;
-                case UNEXPECTED_END_PAREN:
-                    cerr << "\033[1;31m" << "UNEXPECTED_END_PAREN" << "\033[0m" << endl;
-                    cout << e.message << endl;
-                    Lex.reset();
-                    break;
-                case UNEXPECTED_STRING:
-                    cerr << "\033[1;31m" << "UNEXPECTED_STRING" << "\033[0m" << endl;
-                    cout << e.message << endl;
-                    Lex.reset();
-                    break;
-                case UNEXPECTED_EOF:
-                    cerr << "\033[1;31m" << "UNEXPECTED_EOF" << "\033[0m" << endl;
-                    cout << e.message << endl;
-                    Lex.reset();
-                    break;
-                case UNEXPECTED_EXIT:
-                    cerr << "\033[1;31m" << "UNEXPECTED_EXIT" << "\033[0m" << endl;
-                    cout << endl;
-                    Lex.reset();
-                    is_exit = true;
-                    break;
-                default:
-                    break;
-            }
-        }*/
-
-        return node;
-    }
-
-
-    
-    Node_Token* evalution(Node_Token *cur, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
-        // cerr << "-------- enter evalution --------" <<endl;
-        if (cur == nullptr) return nullptr;
-
-        string func_name;
-        vector<Node_Token*> args;
-
-        // Handle atoms
-        if (is_ATOM(cur->token.type)) { //  != DOT &&  != QUOTE
-            if (cur->token.type == SYMBOL) {
-                // cerr << "\033[1;35m" << "---- judge define or not ----\ncur->token.value:" << cur->token.value << "\033[0m" << endl;
-                if (local_defined_table.find(cur->token.value) != local_defined_table.end()) {
-                    return local_defined_table[cur->token.value]; // Return the local bound symbol
-                }
-                else if (defined_table.find(cur->token.value) != defined_table.end()) {
-                    return defined_table[cur->token.value]; // Return the bound symbol
-                }
-                else {
-                    // cerr << "\033[1;35m" << "---- judge failed ----\ncur->token.value:" << cur->token.value << "\033[0m" << endl;
-                    e = unbound_symbol;
-                    throw Error(unbound_symbol, cur->token.value, "unbound symbol", cur->token.line, cur->token.column, cur);
-                }
-            }
-            return cur; // Return the atom itself
-        }
-
-        // judge pure list or not, the rightmost node must be NIL so that can continue
-        // if (...) is not a (pure) list
-        Node_Token *t = cur;
-        while (t != nullptr && t->token.type != NIL) {
-            t = t->right;
-        }
-        if (t == nullptr || t->token.type != NIL) {
-            // cerr << "\033[1;35m" << "--- pure list ---" << "\033[0m" << endl;
-            e = non_list;
-            throw Error(non_list, "non-list", "non-list", 0, 0, cur);
-            // return cur; // Return the atom itself
-        }
-
-        // if first argument of (...) is an atom ☆, which is not a symbol
-        // ERROR (attempt to apply non-function) : ☆
-        Node_Token* func_Token = cur->left;
-        func_name = func_Token->token.value;
-        // cerr << "\033[1;33m" << "func_name: " << func_name << "\033[0m" << endl;
-        // cerr << "\033[1;33m" << "func_Token->token.value: " << func_Token->token.value << "\033[0m" << endl;
-        // cerr << "\033[1;33m" << "func_Token->token.type: " << func_Token->token.type << "\033[0m" << endl;
-
-        if ( is_ATOM(func_Token->token.type) && func_Token->token.type != SYMBOL) {
-            e = undefined_function;
-            throw Error(undefined_function, func_Token->token.value, func_Token->token.value ,func_Token->token.line, func_Token->token.column, func_Token);
-        }
-        else if (func_Token->token.type == SYMBOL || func_Token->token.type == QUOTE) {
-            // cerr << "\033[1;35m" << "is_ATOM(func_Token->token.type): " << func_Token->token.value << "\033[0m" << endl;
-            // if (func_Token->token.type != SYMBOL ) { // || bulid_in_func.find(func_name) == bulid_in_func.end()
-            // }
-            if (local_defined_table.find(func_name) != local_defined_table.end()) { // check whether the first argument is a function
-                // cerr << "\033[1;32m" << "In local_defined_table: " << func_name << "\033[0m" << endl;
-                Node_Token* tmp;
-                if (local_defined_table.find(func_name) != local_defined_table.end()) {
-                    tmp = local_defined_table[func_name]; // get the function token
-                    func_name = local_defined_table[func_name]->token.value;
-                    // cerr << "\033[1;35m" << "is function: " << func_name << "\033[0m" << endl;
-                    // cerr << "\033[1;35m" << "exec: " << func_Token->token.is_function << "\033[0m" << endl;
-                }
-                
-                // not an executable function
-                if (!tmp->token.is_function) {
-                    func_Token->token.value = func_name; // copy the function token
-                    e = undefined_function;
-                    throw Error(undefined_function, func_name, func_name ,func_Token->token.line, func_Token->token.column, func_Token);
-                }
-                else {
-                    // cerr << "\033[1;33m" << "********* set the function token to be executable *********"  << endl;
-                    // func_Token->token.is_function = true; // set the function token to be executable
-                }
-            }
-            else if (defined_table.find(func_name) != defined_table.end()) { // check whether the first argument is a function
-                // cerr << "\033[1;32m" << "In defined_table: " << func_name << "\033[0m" << endl;
-                Node_Token* tmp;
-                if (defined_table.find(func_name) != defined_table.end()) {
-                    tmp = defined_table[func_name]; // get the function token
-                    func_name = defined_table[func_name]->token.value;
-                    // cerr << "\033[1;35m" << "is function: " << func_name << "\033[0m" << endl;
-                    // cerr << "\033[1;35m" << "exec: " << func_Token->token.is_function << "\033[0m" << endl;
-                }
-                
-                // not an executable function
-                if (!tmp->token.is_function) {
-                    func_Token->token.value = func_name; // copy the function token
-                    // tmp->left = func_Token->left;
-                    // tmp->right = func_Token->right;
-                    e = undefined_function;
-                    throw Error(undefined_function, func_name, func_name ,func_Token->token.line, func_Token->token.column, func_Token);
-                }
-                // else {
-                //     cerr << "\033[1;33m" << "********* set the function token to be executable *********"  << endl;
-                //     // func_Token->token.is_function = true; // set the function token to be executable
-                // }
-            }
-            
-            if (func_name == "create-error-object")
-                return err_obj("create-error-object", cur, cur->right, e, local_defined_table);
-            else if (func_name == "error-object?")
-                return err_obj("error-object?", cur, cur->right, e, local_defined_table);
-            else if (func_name == "read")
-                return read(cur, cur->right, e, local_defined_table);
-            // else if (func_name == "write")
-            //     return
-            // else if (func_name == "display-string")
-            //     return
-            // else if (func_name == "newline")
-            //     return
-            // else if (func_name == "eval")
-            //     return
-            // else if (func_name == "set!")
-            //     return
-
-            else if (func_name == "define")
-                return define_func("define", cur, cur->right, e, local_defined_table);
-            else if (func_name == "cons")
-                return cons("cons", cur, cur->right, e, local_defined_table);
-            else if (func_name == "lambda")
-                return lambda(cur, cur->right, e, local_defined_table);
-            else if (func_name == "let")
-                return let("let", cur, cur->right, e, local_defined_table);
-            
-            else if (func_name == "list")
-                return list_func("list", cur, cur->right, e, local_defined_table);
-            else if (func_name == "car")
-                return car("car", cur, cur->right, e, local_defined_table);
-            else if (func_name == "cdr")
-                return cdr("cdr", cur, cur->right, e, local_defined_table);
-
-            else if (func_name == "atom?")
-                return judge_elements("atom?", cur, cur->right, e, local_defined_table);
-            else if (func_name == "pair?")
-                return judge_elements("pair?", cur, cur->right, e, local_defined_table);
-            else if (func_name == "list?")
-                return judge_elements("list?", cur, cur->right, e, local_defined_table);
-            else if (func_name == "null?")
-                return judge_elements("null?", cur, cur->right, e, local_defined_table);
-            else if (func_name == "integer?")
-                return judge_elements("integer?", cur, cur->right, e, local_defined_table);
-            else if (func_name == "real?")
-                return judge_elements("real?", cur, cur->right, e, local_defined_table);
-            else if (func_name == "number?")
-                return judge_elements("number?", cur, cur->right, e, local_defined_table);
-            else if (func_name == "string?")
-                return judge_elements("string?", cur, cur->right, e, local_defined_table);
-            else if (func_name == "boolean?")
-                return judge_elements("boolean?", cur, cur->right, e, local_defined_table);
-            else if (func_name == "symbol?")
-                return judge_elements("symbol?", cur, cur->right, e, local_defined_table);
-
-            else if (func_name == "+")
-                return implement_arithmetic("+", cur, cur->right, e, local_defined_table);
-            else if (func_name == "-")
-                return implement_arithmetic("-", cur, cur->right, e, local_defined_table);
-            else if (func_name == "*")
-                return implement_arithmetic("*", cur, cur->right, e, local_defined_table);
-            else if (func_name == "/")
-                return implement_arithmetic("/", cur, cur->right, e, local_defined_table);
-
-            else if (func_name == "not")
-                return implement_logical("not", cur, cur->right, e, local_defined_table);
-            else if (func_name == "and")
-                return implement_logical("and", cur, cur->right, e, local_defined_table);
-            else if (func_name == "or")
-                return implement_logical("or", cur, cur->right, e, local_defined_table);
-
-            else if (func_name == "=")
-                return compare_func("=", cur, cur->right, e, local_defined_table);
-            else if (func_name == "<")
-                return compare_func("<", cur, cur->right, e, local_defined_table);
-            else if (func_name == ">")
-                return compare_func(">", cur, cur->right, e, local_defined_table);
-            else if (func_name == "<=")
-                return compare_func("<=", cur, cur->right, e, local_defined_table);
-            else if (func_name == ">=")
-                return compare_func(">=", cur, cur->right, e, local_defined_table);
-
-            else if (func_name == "string-append")
-                return str_operator("string-append", cur, cur->right, e, local_defined_table);
-            else if (func_name == "string>?")
-                return str_operator("string>?", cur, cur->right, e, local_defined_table);
-            else if (func_name == "string<?")
-                return str_operator("string<?", cur, cur->right, e, local_defined_table);
-            else if (func_name == "string=?")
-                return str_operator("string=?", cur, cur->right, e, local_defined_table);
-
-            else if (func_name == "eqv?")
-                return eqv("eqv?", cur, cur->right, e, local_defined_table);
-            else if (func_name == "equal?")
-                return equal("equal?", cur, cur->right, e, local_defined_table);
-            else if (func_name == "begin")
-                return begin_func("begin", cur, cur->right, e, local_defined_table);
-
-            else if (func_name == "if")
-                return if_func("if", cur, cur->right, e, local_defined_table);
-            else if (func_name == "cond")
-                return cond_func("COND", cur, cur->right, e, local_defined_table);
-
-            else if (func_name == "clean-environment")
-                return clean_environment(cur, cur->right, e, local_defined_table);
-            else if (func_name == "quote" || func_Token->token.type == QUOTE) // 
-                return quote_func(cur, cur->right, e, local_defined_table);
-            else if (func_name == "exit")
-                return exit_func(cur, cur->right, e, local_defined_table);
-            else if (func_name == "verbose" || func_name == "verbose?") 
-                return verbose_func(func_name, cur, cur->right, e, local_defined_table);
-                
-            else if (defined_table.find(func_name) != defined_table.end()) {
-            //     cerr << "-------- self defined function --------\n";
-            //     cerr << "func_name: " << func_name << endl;
-                return self_defined_function(func_name, cur, e, local_defined_table); // execute self defined function
-            }
-            
-            else { // undefined function
-                // cerr << "-------- undefined function --------\n";
-                
-                e = unbound_symbol;
-                throw Error(unbound_symbol, func_name, func_name ,func_Token->token.line, func_Token->token.column, cur);
-            }
-
-        }
-        else { // the first argument of ( ... ) is ( 。。。 ), i.e., it is ( ( 。。。 ) ...... )
-            // evaluate ( 。。。 )
-            Node_Token* t = evalution(func_Token, e, local_defined_table);
-            cerr << "\033[1;33m" << "--------- judge enter execute_lambda ---------" << "\033[0m" << endl;
-            // if (t != nullptr) {
-            //     cerr << "\033[1;33m" << "t->token.value: " << t->token.value << "\033[0m" << endl;
-            //     cerr << "\033[1;33m" << "t->left->token.type: " << t->left->token.type << "\033[0m" << endl;
-            // }
-            if (t != nullptr && t->token.value == "lambda") {
-                cerr << "\033[1;33m" << "--------- enter execute_lambda ---------" << "\033[0m" << endl;
-                // 若為 lambda function, 則
-                //                  lambda <- t.token
-                //                  /    \
-                //          tmp -> *      * 
-                //               / \    /   \
-                //            arg1 *  body1  *
-                //                / \      /   \
-                //              arg2 nil  body2 nil
-                try {
-                    return execute_lambda(t, cur->right, e, local_defined_table); // execute lambda function
-                }
-                catch (Error err) {
-                    if (e == no_return_value) {
-                        throw Error(no_return_value, func_name, "no_return_value", 0, 0, cur);
-                    }
-                    else
-                        throw err;
-                }
-                
-            }
-            
-
-            // check whether the evaluated result (of ( 。。。 )) is an internal function
-            if (local_defined_table.find(t->token.value) != local_defined_table.end()) {
-                // cerr << "\033[1;34m" << "func.find(t->token.value) != func.end(): " << "\033[0m" << endl;
-                Node_Token* node = new Node_Token();
-                node->token.type = DOT;
-                node->token.value = ".";
-                node->left =t;
-                node->right = cur->right;
-                return evalution(node, e, local_defined_table);
-            }
-            else if (defined_table.find(t->token.value) != defined_table.end()) {
-                // cerr << "\033[1;34m" << "defined_table.find(t->token.value) != defined_table.end(): " << "\033[0m" << endl;
-                Node_Token* node = new Node_Token();
-                node->token.type = DOT;
-                node->token.value = ".";
-                node->left = defined_table[t->token.value];
-                node->right = cur->right;
-                return evalution(node, e, local_defined_table);
-            }
-            else {
-                // lambda ?????
-                e = undefined_function;
-                throw Error(undefined_function, t->token.value, t->token.value ,0, 0, t);
-            }
-
-        }
-        
-        return nullptr;
-    }
-
-
-};
 
 // in order to parse the input, build a parser tree
 class AST_Tree {
@@ -2522,6 +584,35 @@ private:
             cout << " ";
     }
 
+    /*
+    void pretty__print(Node_Token *node, int &countquote) {
+        if (node == nullptr) {
+            return;
+        }
+
+        if ( is_ATOM(node->token.type)) {
+            // cerr << "\033[1;32m" << "is_ATOM: " << node->token.value << "\033[0m" << endl;
+            if (node->token.type == FLOAT) 
+                cout << process_float(node->token);// << endl;
+            else if (node->token.type == NIL) 
+                cout << "nil";// << endl;
+            else if (node->token.type == T) 
+                cout << "#t";// << endl;
+            else if (node->token.type == QUOTE) 
+                cout << "quote";// << endl;
+            else {
+                // if (func.find(node->token.value) != func.end())
+                if (node->token.is_function)
+                    cout << "#<procedure " + node->token.value + ">";// << endl;
+                else
+                    cout << node->token.value;// << endl;
+            }
+            return;
+        }
+        else
+            pretty_print(node, countquote);
+    }
+    */
     void pretty_print(Node_Token *node, int &countquote) {
         if (node == nullptr) {
             return;
@@ -2566,7 +657,7 @@ private:
             if (left_token.type == QUOTE) {
                 // cerr << "\033[1;35m" << "** QUOTE **" << "\033[0m" << endl;
                 // print_space(countquote);
-                cout << "quote" << endl;//
+                cout << "quote";// << endl;//
             }
             else if (left_token.type == DOT) {
                 // cerr << "\033[1;35m" << "** inner DOT **" << "\033[0m" << endl;
@@ -2577,21 +668,21 @@ private:
             else if (left_token.type == NIL) { // (root == node && current_token.type == NIL) ||
                 // cerr << "\033[1;35m" << "** NIL **" << "\033[0m" << endl;
                 // print_space(countquote);
-                cout << "nil" << endl;//
+                cout << "nil";// << endl;//
 
             }
             else { // ATOM
                 // cerr << "\033[1;35m" << "** 1.ATOM **" << "\033[0m" << endl;
                 // deal float
                 if (left_token.type == FLOAT)
-                    cout << process_float(left_token) << endl;
+                    cout << process_float(left_token);// << endl;
                 else {
                     // print_space(countquote);
                     // if (func.find(left_token.value) != func.end())
                     if (left_token.is_function)
-                        cout << "#<procedure " + left_token.value + ">" << endl;
+                        cout << "#<procedure " + left_token.value + ">";// << endl;
                     else
-                        cout << left_token.value << endl;
+                        cout << left_token.value;// << endl;
                 }
                 
             }
@@ -2600,6 +691,7 @@ private:
             while (tmp != nullptr) {
                 if (tmp->token.type == DOT && tmp->left->token.type == DOT) { //  && tmp->right->token.type == DOT
                     // cerr << "\033[1;35m" << "** while DOT 1 **" << "\033[0m" << endl;
+                    cout << "\n";
                     print_space(countquote);
                     pretty_print(tmp->left, countquote);
                 }
@@ -2607,18 +699,19 @@ private:
                     // cerr << "\033[1;35m" << "** while DOT 2 **" << "\033[0m" << endl;
                     // if (tmp->left->token.type != NIL) {
                         // deal float
+                        cout << "\n";
                         print_space(countquote);
 
                         if (tmp->left->token.type == FLOAT)
-                            cout << process_float(tmp->left->token) << endl;
+                            cout << process_float(tmp->left->token);// << endl;
                         else if (tmp->left->token.type == NIL)
-                            cout << "nil" << endl;
+                            cout << "nil";// << endl;
                         else{
                             // if (func.find(tmp->left->token.value) != func.end())
                             if (tmp->left->token.is_function)
-                                cout << "#<procedure " + tmp->left->token.value + ">" << endl;
+                                cout << "#<procedure " + tmp->left->token.value + ">";// << endl;
                             else
-                                cout << tmp->left->token.value << endl;
+                                cout << tmp->left->token.value;// << endl;
                         }
                         
                     // }
@@ -2635,6 +728,7 @@ private:
                 else { // ATOM
                     // cerr << "\033[1;35m" << "** while atom **" << "\033[0m" << endl;
                     // pretty_print(tmp->left, countquote);
+                    cout << "\n";
                     print_space(countquote);
                     cout << "." << endl;
                     
@@ -2650,8 +744,9 @@ private:
 
             }
             countquote--;
+            cout << "\n";
             print_space(countquote);
-            cout << ")" << endl;
+            cout << ")"; //<< endl;
             
         }
         else { //ATOM, leaf node
@@ -2661,14 +756,14 @@ private:
                 print_space(countquote);
 
                 if (current_token.type == FLOAT)
-                    cout << process_float(current_token) << endl;
+                    cout << process_float(current_token);// << endl;
                 else {
                     // cerr << "\033[1;35m" << "** 3.ATOM **" << "\033[0m" << endl;
                     // if (func.find(current_token.value) != func.end())
                     if (current_token.is_function)
-                        cout << "#<procedure " + current_token.value + ">" << endl;
+                        cout << "#<procedure " + current_token.value + ">";// << endl;
                     else
-                        cout << current_token.value << endl;
+                        cout << current_token.value;// << endl;
                 }
             }
 
@@ -2779,10 +874,10 @@ public:
         // cerr << "\033[1;34mend check_syntax\033[0m" << endl;
     }
 
-    void build_tree(vector<Token> &v) {
+    void build_tree(vector<Token> &v, bool check = true) {
         tree.build_AST(v);
 
-        if (tree.check_exit())
+        if (check && tree.check_exit())
             throw Error(UNEXPECTED_EXIT, "exit", "exit", 0, 0);
     }
     
@@ -2802,14 +897,14 @@ public:
         // root = tree.get_root();
         if (r == nullptr) return;
         else if (r->token.type == NIL) {
-            cout << "nil" << endl;
+            cout << "nil";// << endl;
             return;
         }
         int countquote = 0;
 
-        cerr << "\033[1;34menter error pretty_print\033[0m" << endl;
+        // cerr << "\033[1;34menter error pretty_print\033[0m" << endl;
         pretty_print(r, countquote);
-        cerr << "\033[1;34mend error pretty_print\033[0m" << endl;
+        // cerr << "\033[1;34mend error pretty_print\033[0m" << endl;
     }
 
     ~SyntaxAnalyzer() {
@@ -3187,7 +1282,7 @@ public:
         // CurrentToken("");
     }
 
-    string Get_Str(char &c_peek, Token &tmptoken, errorType &error, bool end = false) {
+    string Get_Str(char &c_peek, Token &tmptoken, errorType &error, bool &finish_input, bool end = false) {
         // int leftCount = 0, rightCount = 0; // count '(' and ')'
         string str = "";
         char c = '\0';
@@ -3259,7 +1354,7 @@ public:
             else if (is_comment(c_peek)) {
                 string comment = "";
                 read_whole_string(comment, error, ';');
-                cerr << "\033[1;32mcomment: " << comment << "\033[0m" << endl;
+                // cerr << "\033[1;32mcomment: " << comment << "\033[0m" << endl;
 
                 if (error == UNEXPECTED_EOF) {
                     set_token_line_and_column(tmptoken, 0, 0, "eof");
@@ -3310,7 +1405,7 @@ public:
         if (str.empty())
             // cout << "\033[1;32m----------empty-----------\033[0m" << endl;
             // 只輸入空白字元或換行符時，不會回傳空字串
-            return Get_Str(c_peek, tmptoken, error);
+            return Get_Str(c_peek, tmptoken, error, finish_input);
         
         else
             return str;
@@ -3328,7 +1423,7 @@ public:
             try {
                 // int tmp_line = line;
                 // int tmp_column = column;
-                tmpstr = Get_Str(c_peek, tmptoken, error); // get the string from cin
+                tmpstr = Get_Str(c_peek, tmptoken, error, finish_input); // get the string from cin
                 if (tmpstr == "t")
                     tmptoken.value = "#t";
                 tmptoken.is_function = false; // ! reset is_function flag
@@ -3396,7 +1491,7 @@ public:
         while(!finish_input);
   
         if (finish_input) {
-            cerr << "\033[1;32mfinish_input\033[0m" << endl;
+            // cerr << "\033[1;32mfinish_input\033[0m" << endl;
             // print_vector(tokenBuffer);
 
             while (true) {
@@ -3404,24 +1499,24 @@ public:
 
                 if (c_peek == EOF) {
                     // is_EOF = true;
-                    cerr << "after finish_input, throw error UNEXPECTED_EOF" << endl;
+                    // cerr << "after finish_input, throw error UNEXPECTED_EOF" << endl;
                     // c_peek = getchar(); // skip the EOF
                     // ungetc(c_peek, stdin); // push EOF back to the buffer
                     return; // 交給下次呼叫 get_token() 處理此 EOF，因為要先建樹
                 }
                 else if (is_enter(c_peek)) {
-                    cerr << "after finish_input, is_enter" << endl;
+                    // cerr << "after finish_input, is_enter" << endl;
                     getchar(); // skip the char of '\n'}
                     return;
                 }
                 else if (is_space(c_peek)) {
-                    cerr << "after finish_input, is_space" << endl;
+                    // cerr << "after finish_input, is_space" << endl;
                     start_column++;
                     getchar(); // skip the char of ' '
                     continue;
                 }
                 else if (is_comment(c_peek)) {
-                    cerr << "after finish_input, is_comment" << endl;
+                    // cerr << "after finish_input, is_comment" << endl;
                     string trash;
                     getline(cin, trash);
                     for (char c : trash) {
@@ -3430,11 +1525,11 @@ public:
                     }
                     start_column = 1;
         
-                    cerr << "\033[1;33mthrow trash in get_token: " << trash << "\033[0m" << endl;
+                    // cerr << "\033[1;33mthrow trash in get_token: " << trash << "\033[0m" << endl;
                     return;
                 }
                 else {
-                    cerr << "\033[1;31m"<< "c_peek: " << c_peek << "\033[0m" << endl;
+                    // cerr << "\033[1;31m"<< "c_peek: " << c_peek << "\033[0m" << endl;
                     return;
                 }
 
@@ -3552,15 +1647,2060 @@ void push_bulid_in_func_in_defined_table() {
     }
 }
 
+SyntaxAnalyzer syn;
 
-bool encounter_eof;
-bool buffer_remain;
+class FunctionExecutor {
+    private:
+    int count_args(Node_Token *args) {
+        int count = 0;
+        while (args->left != nullptr) {
+            // cerr << "\033[1;35m" << "args->left: " << args->left->token.value << "\033[0m" << endl;
+            args = args->right;
+            count++;
+        }
+        // cerr << "\033[1;35m" << "count_args: " << count << "\033[0m" << endl;
+        // cerr << "\033[1;35m-----------------------------------\033[0m" << endl;
+        return count;
+    }
+    bool is_ATOM(TokenType type) {
+        // <ATOM> ::= SYMBOL | INT | FLOAT | STRING | NIL | T | Left-PAREN Right-PAREN
+        if (type == SYMBOL || type == INT || type == FLOAT || type == STRING || type == NIL || type == T) // || type == Left_PAREN || type == Right_PAREN
+            return true;
+        // QUOTE、DOT
+        return false;
+    }
+    
+    bool is_reserved_word(string str) {
+        if (bulid_in_func.find(str) != bulid_in_func.end())
+            return true;
+
+        return false;
+    }
+    bool is_equ_address(Node_Token *arg1, Node_Token *arg2) {
+        if (arg1 == nullptr && arg2 == nullptr) 
+            return true;
+        else if (arg1 == nullptr && arg2 != nullptr)
+            return false;
+        else if (arg1 != nullptr && arg2 == nullptr)
+            return false;
+        else if (arg1->token.type == INT || arg1->token.type == FLOAT || arg1->token.type == NIL || arg1->token.type == T) {
+            if (arg1->token.type == arg2->token.type && arg1->token.value == arg2->token.value)
+                return is_equ_address(arg1->left, arg2->left) && is_equ_address(arg1->right, arg2->right);
+            else
+                return false;
+        }
+        else if (arg1 != arg2)
+            return false;
+        else 
+            return is_equ_address(arg1->left, arg2->left) && is_equ_address(arg1->right, arg2->right);
+
+        return is_equ_address(arg1->left, arg2->left) && is_equ_address(arg1->right, arg2->right);
+    }
+    bool is_equ(Node_Token *arg1, Node_Token *arg2) {
+        if (arg1 == nullptr && arg2 == nullptr) 
+            return true;
+        else if (arg1 == nullptr && arg2 != nullptr)
+            return false;
+        else if (arg1 != nullptr && arg2 == nullptr)
+            return false;
+        
+        else if (arg1->token.type != arg2->token.type || arg1->token.value != arg2->token.value)
+            return false;
+        else 
+            return is_equ(arg1->left, arg2->left) && is_equ(arg1->right, arg2->right);
+
+        return is_equ(arg1->left, arg2->left) && is_equ(arg1->right, arg2->right);
+    }
+    Node_Token* sequence(Node_Token *cur, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
+        Node_Token* node = nullptr;
+        while (cur != nullptr && cur->token.type != NIL) {
+            try {
+                node = evalution(cur->left, e, local_defined_table);
+            }
+            catch (Error err) {
+                if (e == no_return_value) { //  || e == no_return_value_inernal
+                    if (cur->right == nullptr || cur->right->token.type == NIL) {
+                        throw Error(no_return_value, cur->left->token.value, "no return value", 0, 0, cur);
+                        // throw err; // If it's the last s-exp
+                    }
+                    else {
+                        // cerr << "\033[1;31m" << "in sequence no return error: " << err.message << "\033[0m" << endl;
+                        // cerr 
+                        e = Error_None; // otherwise, ignore the error
+                        
+                    }
+                }
+                else throw err;
+            }
+            cur = cur->right;
+        }
+        // cerr << "\033[1;35m" << "node: " << node->token.value << "\033[0m" << endl;
+        return node;
+    }
+    public:
+    Node_Token* define_func(string instr, Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
+        cerr << "\033[1;33m" << "define_func" << "\033[0m" << endl;
+        vector<Node_Token*> arg_list;
+        int c = count_args(args);
+        if (cur->parent != nullptr){
+            e = error_level_define;
+            throw Error(error_level_define, instr, "DEFINE", 0, 0);
+        }
+        else if (c < 2) {
+            e = error_define_format;
+            throw Error(error_define_format, "DEFINE", "error_define_format", 0, 0, cur);
+        }
+        else if (c > 2 || args->left->token.type == DOT) {
+            if (args->left->token.type == DOT && args->left->left->token.type != QUOTE)  // (define (a) b c)
+                return define_func_more(instr, cur, args, e, local_defined_table);
+            // (define a (b) (c))
+            e = error_define_format;
+            throw Error(error_define_format, "DEFINE", "error_define_format", 0, 0, cur);
+        }
+        else {
+
+            Node_Token *t = args;
+            // ! while (t != nullptr && t->token.type != NIL)
+            for (int i = 0 ; i < 2 ; i++) {
+                Node_Token *parameter = t->left;
+                
+                if (i == 0) {
+                    // cerr << "1.     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1"<<endl;
+                    if (parameter->token.type == SYMBOL) {
+                        // none reserved word
+                        if (is_reserved_word(parameter->token.value)) {
+                            e = error_define_format;
+                            throw Error(error_define_format, "DEFINE", "error_define_format", 0, 0, cur);
+                        }
+                        arg_list.push_back(parameter);
+                    }
+                    else if (is_ATOM(parameter->token.type)) { // || parameter->token.type == DOT
+                        // cerr << "2.     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1"<<endl;
+
+                        e = error_define_format;
+                        throw Error(error_define_format, "DEFINE", "error_define_format", 0, 0, cur);
+                    }
+                }
+                else {
+                    try {
+                        arg_list.push_back(evalution(parameter, e, local_defined_table));
+                    }
+                    catch (Error err) {
+                        // cerr << "\033[1;35m" << "error: " << error << "\033[0m" << endl;
+                        if (e == no_return_value) {
+                            e = no_return_value_inernal;
+                            // throw Error(no_return_value_inernal, instr, "unbound parameter", 0, 0, parameter);
+                            throw Error(no_return_value_inernal, err.current, "no_return_value_inernal", 0, 0, err.root);
+                        }
+                        else
+                            throw err;
+                    }
+                }
+
+                if (i == 1) {
+                    defined_table[arg_list.at(0)->token.value] = arg_list.at(1);
+                    e = defined;
+                    throw Error(defined, arg_list.at(0)->token.value, "defined la la", 0, 0, cur);
+                
+                }
+                
+                t = t->right;
+            }
+            
+            
+        }
+        return nullptr;
+    }
+
+    Node_Token* define_func_more(string instr, Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
+        cerr << "\033[1;33m" << "define_func_more" << "\033[0m" << endl;
+        vector<Node_Token*> arg_list;
+        int c = count_args(args);
+        //                  * <- cur
+        //                /   \
+        //             define  . <- args
+        //                   /   \
+        //                 .       .
+        //                / \     / \
+        //               a  nil expr1 .
+        //                           / \
+        //                       expr2  nil
+
+        Node_Token* func = new Node_Token();
+        pointer_gather.insert(func);
+        func->token.value = args->left->left->token.value; // function name
+        func->token.type = args->left->left->token.type; // function name
+        // cerr << "func->token.value: " << func->token.value << endl;
+        // cerr << "func->token.type: " << func->token.type << endl;
+
+        if (func->token.type == SYMBOL) {
+            // cerr << "func->token.type == SYMBOL" << endl;
+            if (is_reserved_word(func->token.value)) {
+                // cerr << "func->token.type == SYMBOL && is_reserved_word(func->token.value)" << endl;
+                e = error_define_format;
+                throw Error(error_define_format, "DEFINE", "error_define_format", 0, 0, cur);
+            }
+        }
+        else if ( is_ATOM(func->token.type) || func->token.type == DOT || func->token.type == QUOTE) {
+            e = error_define_format;
+            throw Error(error_define_format, "DEFINE", "error_define_format", 0, 0, cur);
+        }
+
+        // cerr << "\033[1;33m" << "set " << func->token.value <<" is_function = true " << "\033[0m" << endl;
+        func->token.is_function = true;
+        func->left = args->left->right; // parameter list, 有可能是nil, none args
+        func->right = args->right; // expression, 有可能有多個 expr
+
+        //                  a <- func
+        //                /   \
+        //              nil     .
+        //                     / \
+        //                  expr1  .
+        //                        / \
+        //                   expr2  nil
+
+        defined_table[func->token.value] = func; // store the function name and function body
+        e = defined;
+        throw Error(defined, func->token.value, "defined la la", 0, 0, cur);
+
+        return nullptr;
+    }
+
+    Node_Token* self_defined_function(string instr, Node_Token *cur, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
+        cerr << "\033[1;33m" << "--------- enter self_defined_function ---------" << "\033[0m" << endl;
+        Node_Token* node;
+        vector<Node_Token*> arg_list;
+        unordered_map<string, Node_Token*> new_table; // = local_defined_table
+
+        // *defined local variable
+        Node_Token* func_name = cur->left; // function name
+        string func_name_str;
+        Node_Token* func_args; // 參數列表
+        Node_Token* func_exprs; // 表達式列表
+        if (local_defined_table.find(func_name->token.value) != local_defined_table.end()) {
+            func_args = local_defined_table[func_name->token.value]->left;
+            func_exprs = local_defined_table[func_name->token.value]->right;
+            func_name_str = local_defined_table[func_name->token.value]->token.value;
+        }
+        else if (defined_table.find(func_name->token.value) != defined_table.end()) {
+            func_args = defined_table[func_name->token.value]->left;
+            func_exprs = defined_table[func_name->token.value]->right;
+            func_name_str = defined_table[func_name->token.value]->token.value;
+        }
+        else {
+            e = undefined_function;
+            throw Error(undefined_function, func_name->token.value, "undefined function", 0, 0, cur);
+        }
+        
+        // count args
+        // cerr << "\033[1;31mstart counting \033[0m" << endl;
+        if (count_args(func_args) != count_args(cur->right)) { // 兩個以上參數
+            e = incorrect_number_of_arguments;
+            throw Error(incorrect_number_of_arguments, func_name_str, "incorrect_number_of_arguments", 0, 0, cur);
+        }
+        // cerr << "\033[1;31mend counting \033[0m" << endl;
+        
+
+
+        Node_Token* args = cur->right;
+        // lambda_args->token.type != NIL && lambda_args != nullptr && defined_args->token.type != NIL && defined_args != nullptr
+        // cerr << "\033[1;32m" << " *** test1 *** "  << "\033[0m" << endl;
+        while (args->token.type != NIL && args != nullptr) {
+            // cerr << "\033[1;35m" << "lambda_args: " << args->left->token.value << "\033[0m" << endl;
+            try {
+                arg_list.push_back(evalution(args->left, e, local_defined_table));
+                // cerr << "\033[1;36m" << "lambda_args: " << args->left->token.value << "\033[0m" << endl;
+                // cerr << "\033[1;36m" << "arg_list: " << arg_list.at(arg_list.size()-1)->token.value << "\033[0m" << endl;
+            }
+            catch (Error err) {
+                // cerr << "\033[1;35m" << "error: " << error << "\033[0m" << endl;
+                if (e == no_return_value) {
+                    e = unbound_parameter;
+                    throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, err.root);
+                }
+                else
+                    throw err;
+            }
+            args = args->right;
+        }
+
+        for (auto arg : arg_list) {
+            if (func_args->token.type == NIL || func_args == nullptr) {
+                e = incorrect_number_of_arguments;
+                string func_name_str;
+                if (defined_table.find(func_name->token.value) != defined_table.end())
+                    func_name_str = defined_table[func_name->token.value]->token.value;
+                else func_name_str = func_name->token.value;
+                
+                throw Error(incorrect_number_of_arguments, func_name_str, "incorrect_number_of_arguments", 0, 0, cur);
+            }
+            new_table[func_args->left->token.value] = arg;
+            func_args = func_args->right;
+        }
+
+        if (func_args->token.type != NIL) {
+            e = incorrect_number_of_arguments;
+            string func_name_str;
+                if (defined_table.find(func_name->token.value) != defined_table.end())
+                    func_name_str = defined_table[func_name->token.value]->token.value;
+                else func_name_str = func_name->token.value;
+
+            throw Error(incorrect_number_of_arguments, func_name_str, "incorrect_number_of_arguments", 0, 0, cur);
+        }
+        // cerr << "\033[1;32m" << " *** test2 *** "  << "\033[0m" << endl;
+        try {
+            return sequence(func_exprs, e, new_table);
+        }
+        catch (Error err) {
+            if (e == no_return_value) {
+                // e = no_return_value_inernal;
+                throw Error(no_return_value, func_name->token.value, "no return value", 0, 0, func_exprs);
+            }
+            
+            throw Error(err.type, err.expected, err.message, 0, 0, err.root);
+        }
+        // return node;
+    }
+
+    Node_Token* cons(string instr, Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
+        Node_Token* node = new Node_Token();
+        pointer_gather.insert(node);
+        vector<Node_Token*> arg_list;
+
+        if (count_args(args) != 2) {
+            e = incorrect_number_of_arguments;
+            throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
+        }
+        else {
+            Node_Token *t = args;
+            while (t != nullptr && t->token.type != NIL) {
+                Node_Token *parameter = t->left;
+                // cerr << "\033[1;35m" << "parameter: " << parameter->token.value << "\033[0m" << endl;
+                try {
+                    arg_list.push_back(evalution(parameter, e, local_defined_table));
+                }
+                catch (Error err) {
+                    // cerr << "\033[1;35m" << "error: " << error << "\033[0m" << endl;
+                    if (e == no_return_value) {
+                        e = unbound_parameter;
+                        throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, err.root);
+                    }
+                    else
+                        throw err;
+                }
+
+                t = t->right;
+            }
+            // Create a new node for the cons cell
+            node->token.type = DOT;
+            node->token.value = ".";
+            node->left = arg_list.at(0);
+            // cerr << "\033[1;35m" << "arg_list.at(0): " << arg_list.at(0)->token.value << "\033[0m" << endl;
+            node->right = arg_list.at(1);
+            // cerr << "\033[1;35m" << "arg_list.at(1): " << arg_list.at(1)->token.value << "\033[0m" << endl;
+        }
+
+        return node;
+    }
+    Node_Token* lambda(Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
+        // cerr << "\033[1;33m" << "--------- enter lambda ---------" << "\033[0m" << endl;
+
+        // cerr << "\033[1;35m" << "cur->left: " << cur->left->token.value << "\033[0m" << endl;
+        if (cur->left->token.value != "lambda" && defined_table.find(cur->left->token.value) != defined_table.end()) {
+            // cerr << "\033[1;35m" << "cur->left: " << cur->left->token.value << "\033[0m" << endl;
+            if (defined_table[cur->left->token.value]->token.is_function) {
+                // Node_Token* func_Token = defined_table[cur->left->token.value];
+                Node_Token* t = defined_table[cur->left->token.value];
+                // cerr << "\033[1;33m" << "--------- judge enter execute_lambda ---------" << "\033[0m" << endl;
+
+                if (t != nullptr && t->token.value == "lambda") {
+                    // cerr << "\033[1;33m" << "--------- enter execute_lambda ---------" << "\033[0m" << endl;
+                    // 若為 lambda function, 則
+                    //                  lambda <- t.token
+                    //                  /    \
+                    //          tmp -> *      * 
+                    //               / \    /   \
+                    //            arg1 *  body1  *
+                    //                / \      /   \
+                    //              arg2 nil  body2 nil
+                    return execute_lambda(cur, t, cur->right, e, local_defined_table); // execute lambda function
+                }
+            }
+        }
+        else if (cur->left->token.value != "lambda" && local_defined_table.find(cur->left->token.value) != local_defined_table.end()) {
+            // cerr << "\033[1;35m" << "cur->left: " << cur->left->token.value << "\033[0m" << endl;
+            if (local_defined_table[cur->left->token.value]->token.is_function) {
+                // Node_Token* func_Token = defined_table[cur->left->token.value];
+                Node_Token* t = local_defined_table[cur->left->token.value];
+                // cerr << "\033[1;33m" << "--------- judge enter execute_lambda ---------" << "\033[0m" << endl;
+
+                if (t != nullptr && t->token.value == "lambda") {
+                    // cerr << "\033[1;33m" << "--------- enter execute_lambda ---------" << "\033[0m" << endl;
+                    // 若為 lambda function, 則
+                    //                  lambda <- t.token
+                    //                  /    \
+                    //          tmp -> *      * 
+                    //               / \    /   \
+                    //            arg1 *  body1  *
+                    //                / \      /   \
+                    //              arg2 nil  body2 nil
+                    return execute_lambda(cur, t, cur->right, e, local_defined_table); // execute lambda function
+                }
+            }
+        }
+
+        Node_Token* node = new Node_Token();
+        pointer_gather.insert(node);
+        
+        node->token.type = SYMBOL;
+        node->token.value = "lambda";
+        node->token.is_function = true;
+
+
+        if (count_args(args) < 2) { // 兩個以上參數
+            
+            e = error_define_format;
+            // cur->left->token.is_function = false;
+            throw Error(error_define_format, "LAMBDA", "error_define_format", 0, 0, cur);
+        }
+        else if (args->left->token.type != DOT && args->left->token.type != NIL ) { // (lambda x  (y z)) -> error
+            e = error_define_format;
+            throw Error(error_define_format, "LAMBDA", "error_define_format", 0, 0, cur);
+        }
+
+        else {
+            node->left = args->left; // 參數列表
+            node->right = args->right; // expression
+            Node_Token* left_node;
+            if (args->left->token.type == NIL) left_node = nullptr; // ( lambda () (y)( z) ) == ( lambda nil (y)( z) ) == ( lambda #f (y)( z) )
+            else {
+                left_node = node->left;
+                if (left_node->left->token.type == NIL) { // ( lambda (nil) (y)( z) ) == ( lambda (#f) (y)( z) )
+                    e = error_define_format;
+                    throw Error(error_define_format, "LAMBDA", "error_define_format", 0, 0, cur);
+                }
+            }
+
+            while (left_node != nullptr && left_node->token.type != NIL) {
+                if (left_node->left->token.type != SYMBOL) {
+                    if (left_node->left->token.type == DOT)
+                        left_node->left = evalution(left_node->left, e, local_defined_table);
+                    else {
+                        e = error_define_format;
+                        throw Error(error_define_format, "LAMBDA", "error_define_format", 0, 0, cur);
+                    }
+                }
+                // 排除保留字
+                else if (is_reserved_word(left_node->left->token.value)) {
+                    e = error_define_format;
+                    throw Error(error_define_format, "LAMBDA", "error_define_format", 0, 0, cur);
+                }
+                
+                left_node = left_node->right;
+            }
+
+        }
+
+        return node;
+    }
+    Node_Token* execute_lambda(Node_Token *cur, Node_Token *lambda, Node_Token *defined_args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
+        cerr << "\033[1;33m" << "--------- enter execute_lambda ---------" << "\033[0m" << endl;
+        Node_Token* node;
+        vector<Node_Token*> arg_list;
+        unordered_map<string, Node_Token*> new_table; //  = local_defined_table
+
+        int init_c = count_args(lambda->left);
+        int input_c = count_args(defined_args); // lambda args
+        // cerr << "\033[1;35m" << "init_c: " << init_c << "\033[0m" << endl;
+        // cerr << "\033[1;35m" << "input_c: " << input_c << "\033[0m" << endl;
+        if (input_c != init_c) { // 參數量不相同
+            e = incorrect_number_of_arguments;
+            throw Error(incorrect_number_of_arguments, lambda->token.value, "incorrect_number_of_arguments", 0, 0, lambda);
+        }
+        
+        // *defined local variable
+        
+        while (defined_args->token.type != NIL && defined_args != nullptr) {
+            // cerr << "\033[1;35m" << "lambda_args: " << lambda_args->left->token.value << "\033[0m" << endl;
+            try {
+                arg_list.push_back(evalution(defined_args->left, e, local_defined_table));
+            }
+            catch (Error err) {
+                if (e == no_return_value) {
+                    e = unbound_parameter;
+                    throw Error(unbound_parameter, defined_args->left->token.value, "unbound_parameter", 0, 0, err.root);
+                }
+
+                throw err;
+            }
+            defined_args = defined_args->right;
+        }
+
+        Node_Token* lambda_args = lambda->left;
+        for (auto arg : arg_list) {
+            if (lambda_args->token.type == NIL || lambda_args == nullptr) {
+                e = incorrect_number_of_arguments;
+                throw Error(incorrect_number_of_arguments, lambda->token.value, "incorrect_number_of_arguments", 0, 0, lambda);
+            }
+            // cerr << "\033[1;31m" << "lambda_args: " << lambda_args->left->token.value << "\033[0m" << endl;
+            // cerr << "\033[1;31m" << "arg: " << arg->token.value << "\033[0m" << endl;
+            new_table[lambda_args->left->token.value] = arg;
+            lambda_args = lambda_args->right;
+        }
+
+        if (lambda_args->token.type != NIL) {
+            if (e != Error_None) 
+            e = incorrect_number_of_arguments;
+            throw Error(incorrect_number_of_arguments, lambda->token.value, "incorrect_number_of_arguments", 0, 0, lambda);
+        }
+
+
+        try {
+            return sequence(lambda->right, e, new_table);
+        }
+        catch (Error err) {
+            if (e == no_return_value) {
+                // e = no_return_value_inernal;
+                throw Error(no_return_value, lambda->token.value, "no return value", 0, 0, cur);
+            }
+            
+            throw Error(err.type, err.expected, err.message, 0, 0, err.root);
+        }
+    }
+    
+    Node_Token* let(string instr, Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
+        // cerr << "\033[1;33m" << "--------- enter let ---------" << "\033[0m" << endl;
+        Node_Token* node;
+        // pointer_gather.insert(node);
+        // vector<Node_Token*> arg_list;
+        unordered_map<string, Node_Token*> new_table = local_defined_table;
+        
+        
+        if (count_args(args) < 2) { // 兩個以上參數
+            // cerr << "\033[1;35m" << "error: 1. error_define_format\033[0m" << endl;
+            e = error_define_format;
+            // cur->left->token.is_function = false;
+            throw Error(error_define_format, "LET", "error_define_format", 0, 0, cur);
+        }
+        
+        Node_Token* first_arg = args->left;
+        if (first_arg->token.type != DOT && first_arg->token.type != NIL) { // 第一個參數必須是 expression
+            e = error_define_format;
+            throw Error(error_define_format, "LET", "error_define_format", 0, 0, cur);
+        }
+
+
+        while (first_arg != nullptr && first_arg->token.type != NIL) {
+            Node_Token* tmp = first_arg->left;
+            if (tmp == nullptr || tmp->token.type != DOT || tmp->left->token.type != SYMBOL) {
+                e = error_define_format;
+                throw Error(error_define_format, "LET", "error_define_format", 0, 0, cur);
+            }
+            // else
+            if (is_reserved_word(tmp->left->token.value)) {
+                e = error_define_format;
+                throw Error(error_define_format, "LET", "error_define_format", 0, 0, cur);
+            }
+
+            if (count_args(tmp) != 2) { // (x 1 2) -> error, (x 1) -> ok
+                e = error_define_format;
+                throw Error(error_define_format, "LET", "error_define_format", 0, 0, cur);
+            }
+            first_arg = first_arg->right;
+        }
+        
+        // 對區域變數進行綁定
+        first_arg = args->left;
+        while (first_arg != nullptr && first_arg->token.type != NIL) {
+            Node_Token* tmp = first_arg->left;
+
+            try {
+                // cerr << "\033[1;35m" << "4. arg: " << tmp->left->token.value << "\033[0m" << endl;
+                new_table[tmp->left->token.value] = evalution(tmp->right->left, e, local_defined_table);
+            }
+            catch (Error err) {
+                // cerr << "\033[1;31m" << "******* 1. let error *******" << "\033[0m" << endl;
+                if (e == no_return_value) {
+                    e = no_return_value_inernal;
+                    throw Error(no_return_value_inernal, err.current, "no_return_value_inernal", 0, 0, err.root); // arg->right->left
+                    // throw Error(no_return_value, instr, "no_return_value", 0, 0, cur); // arg->right->left
+                }
+                throw err;
+            }
+            
+            first_arg = first_arg->right;
+        }
+
+        Node_Token* other_arg = args->right;
+
+        try {
+            return sequence(other_arg, e, new_table);
+        }
+        catch (Error err) {
+            if (e == no_return_value) {
+                // e = no_return_value_inernal;
+                throw Error(no_return_value, other_arg->token.value, "no return value", 0, 0, cur);
+            }
+            
+            throw Error(err.type, err.expected, err.message, 0, 0, err.root);
+        }
+    }
+    // ! (list '(4 5))
+    Node_Token* list_func(string instr, Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
+        Node_Token* node = new Node_Token();
+        pointer_gather.insert(node);
+        node->token.type = DOT;
+        node->token.value = ".";
+
+        if (count_args(args) < 1) {
+            // throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
+            node->token.type = NIL;
+            node->token.value = "#f";
+            return node;
+        }
+        else {
+            Node_Token* current = node;
+            Node_Token* head = node;
+
+            while (args != nullptr && args->token.type != NIL) {
+                Node_Token* parameter = args->left;
+                Node_Token* evaluated = nullptr;
+
+                try {
+                    evaluated = evalution(parameter, e, local_defined_table);
+                }
+                catch (Error err) {
+                    if (e == no_return_value) {
+                        e = unbound_parameter;
+                        throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, err.root);
+                    }
+                    else
+                        throw err;
+                }
+
+                current->left = evaluated;
+                if (args->right != nullptr && args->right->token.type != NIL) {
+                    Node_Token* next = new Node_Token();
+                    pointer_gather.insert(next);
+                    next->token.type = DOT;
+                    next->token.value = ".";
+                    current->right = next;
+                    current = next;
+                }
+                else {
+                    current->right = new Node_Token();
+                    pointer_gather.insert(current->right);
+                    current->right->token.type = NIL;
+                    current->right->token.value = "#f";
+                }
+
+                args = args->right;
+            }
+
+            return head;
+        }
+    }
+    Node_Token* car(string instr, Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
+        if (count_args(args) != 1) {
+            e = incorrect_number_of_arguments;
+            throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
+        }
+        else {
+            Node_Token *parameter = args->left;
+            try {
+                parameter = evalution(args->left, e, local_defined_table);
+            }
+            catch (Error err) {
+                if (e == no_return_value) {
+                    e = unbound_parameter;
+                    throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, err.root);
+                }
+                else
+                    throw err;
+            }
+
+            if (parameter->token.type != DOT) {
+                e = incorrect_argument_type;
+                throw Error(incorrect_argument_type, instr, parameter->token.value, 0, 0, parameter);
+            }
+            else 
+                return parameter->left;
+            
+        }
+
+        // return nullptr;
+    }
+    Node_Token* cdr(string instr, Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
+        if (count_args(args) != 1) {
+            e = incorrect_number_of_arguments;
+            throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
+        }
+        else {
+            Node_Token *parameter = args->left;
+            try {
+                parameter = evalution(args->left, e, local_defined_table);
+            }
+            catch (Error err) {
+                if (e == no_return_value) {
+                    e = unbound_parameter;
+                    throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, err.root);
+                }
+                else
+                    throw err;
+            }
+
+            if (is_ATOM(parameter->token.type)) {
+                e = incorrect_argument_type;
+                throw Error(incorrect_argument_type, instr, parameter->token.value, 0, 0, parameter);
+            }
+            else 
+                return parameter->right;
+            
+        }
+    }
+    
+    Node_Token* judge_elements(string instr, Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
+        Node_Token* node = new Node_Token();
+        pointer_gather.insert(node);
+        node->token.value = "#f";
+        node->token.type = NIL;
+
+        if (count_args(args) != 1) {
+            e = incorrect_number_of_arguments;
+            throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
+        }
+        else {
+            
+            if (args != nullptr && args->token.type != NIL) {
+                Node_Token *parameter = args->left;
+                try {
+                    parameter = evalution(args->left, e, local_defined_table);
+                }
+                catch (Error err) {
+                    if (e == no_return_value) {
+                        e = unbound_parameter;
+                        throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, err.root);
+                    }
+                    else
+                        throw err;
+                }
+                if (instr == "atom?") {
+                    if (is_ATOM(parameter->token.type)) {
+                        node->token.value = "#t";
+                        node->token.type = T;
+                    }
+                }
+                else if (instr == "pair?") {
+                    if (parameter->token.type == DOT) {
+                        node->token.value = "#t";
+                        node->token.type = T;
+                    }
+                }
+                else if (instr == "list?") {
+                    if (parameter->token.type == DOT) {
+                        Node_Token *tmp = parameter;
+                        while (tmp->right != nullptr)
+                            tmp = tmp->right;
+                        
+                        if (tmp->token.type == NIL) {
+                            node->token.value = "#t";
+                            node->token.type = T;
+                        }
+                        
+                    }
+                }
+                else if (instr == "null?") {
+                    if (parameter->token.type == NIL) {
+                        node->token.value = "#t";
+                        node->token.type = T;
+                    }
+                }
+                else if (instr == "integer?") {
+                    if (parameter->token.type == INT) {
+                        node->token.value = "#t";
+                        node->token.type = T;
+                    }
+                }
+                else if (instr == "real?" || instr == "number?") {
+                    if (parameter->token.type == INT || parameter->token.type == FLOAT) {
+                        node->token.value = "#t";
+                        node->token.type = T;
+                    }
+                }
+                else if (instr == "string?") {
+                    if (parameter->token.type == STRING) {
+                        node->token.value = "#t";
+                        node->token.type = T;
+                    }
+                }
+                else if (instr == "boolean?") {
+                    if (parameter->token.type == T || parameter->token.type == NIL) {
+                        node->token.value = "#t";
+                        node->token.type = T;
+                    }
+                }
+                else if (instr == "symbol?") {
+                    if (parameter->token.type == SYMBOL) {
+                        node->token.value = "#t";
+                        node->token.type = T;
+                    }
+                }
+
+            }
+            
+        }
+        return node;
+    }
+    
+    // (/ + - -)
+    // > ERROR (/ with incorrect argument type) : #<procedure +>
+    Node_Token* implement_arithmetic(string instr, Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
+        Node_Token* node = new Node_Token();
+        pointer_gather.insert(node);
+        vector<Node_Token*> arg_list;
+        bool float_flag = false;
+
+        if (count_args(args) < 2) {
+            e = incorrect_number_of_arguments;
+            throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
+        }
+        else {
+            Node_Token *t = args;
+            while (t != nullptr && t->token.type != NIL) {
+                Node_Token *parameter = t->left;
+                try {
+                    arg_list.push_back(evalution(parameter, e, local_defined_table));
+                }
+                catch (Error err) {
+                    if (e == no_return_value) {
+                        if (parameter->left->token.type == DOT)
+                            throw err;
+                        e = unbound_parameter;
+                        throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, err.root);
+                    }
+                    else
+                        throw err;
+                }
+
+                if (arg_list.back()->token.type == FLOAT)
+                    float_flag = true;
+                else if (arg_list.back()->token.type == DOT) {
+                    e = incorrect_argument_type;
+                    throw Error(incorrect_argument_type, instr, "incorrect_argument_type", 0, 0, arg_list.back());
+                }
+                else if (arg_list.back()->token.type != INT && arg_list.back()->token.type != FLOAT) {
+                    e = incorrect_argument_type;
+                    throw Error(incorrect_argument_type, instr, arg_list.back()->token.value, 0, 0, arg_list.back());
+                }
+
+                t = t->right;
+            }
+        }
+
+        if (float_flag) {
+            double sum = stod(arg_list.at(0)->token.value);
+            for (int i = 1 ; i < arg_list.size() ; i++) {
+                if (instr == "+")
+                    sum += stod(arg_list.at(i)->token.value);
+                else if (instr == "-")
+                    sum -= stod(arg_list.at(i)->token.value);
+                else if (instr == "*")
+                    sum *= stod(arg_list.at(i)->token.value);
+                else if (instr == "/") {
+                    double divisor = stod(arg_list.at(i)->token.value);
+                    if (divisor == 0.0) {
+                        e = division_by_zero;
+                        throw Error(division_by_zero, "/", "division by zero", 0, 0);
+                    }
+                    sum /= divisor;
+                }
+            }
+            node->token.value = to_string(sum);
+            node->token.type = FLOAT;
+        }
+        else {
+            int sum = stoi(arg_list.at(0)->token.value);
+            for (int i = 1 ; i < arg_list.size() ; i++) {
+                if (instr == "+")
+                    sum += stoi(arg_list.at(i)->token.value);
+                else if (instr == "-")
+                    sum -= stoi(arg_list.at(i)->token.value);
+                else if (instr == "*")
+                    sum *= stoi(arg_list.at(i)->token.value);
+                else if (instr == "/") {
+                    double divisor = stoi(arg_list.at(i)->token.value);
+                    if (divisor == 0.0) {
+                        e = division_by_zero;
+                        throw Error(division_by_zero, "/", "division by zero", 0, 0);
+                    }
+                    sum /= divisor;
+                }
+                
+            }
+            node->token.value = to_string(sum);
+            node->token.type = INT;
+        }
+
+        return node;
+    }
+
+    Node_Token* implement_logical(string instr, Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
+        Node_Token* node = new Node_Token();
+        pointer_gather.insert(node);
+        vector<Node_Token*> arg_list;
+        node->token.value = "#t";
+        node->token.type = T;
+
+        if (instr == "not" && count_args(args) != 1) {
+            e = incorrect_number_of_arguments;
+            throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
+        }
+        else if ((instr == "and" || instr == "or") && count_args(args) < 2) {
+            e = incorrect_number_of_arguments;
+            throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
+        }
+        else {
+            Node_Token *t = args;
+            while (t != nullptr && t->token.type != NIL) {
+                Node_Token *parameter = t->left;
+                try {
+                    arg_list.push_back(evalution(parameter, e, local_defined_table));
+                    if (instr == "not") {
+                        if (arg_list.back()->token.type != NIL) {
+                            node->token.value = "#f";
+                            node->token.type = NIL;
+                        }
+                    }
+                    /*
+                    第一個被計算為 nil 則回傳 nil
+                    如果不是 nil 則回傳最後一個計算出的值
+                    */
+                    else if (instr == "and") {
+                        if (arg_list.back()->token.type == NIL)
+                            return arg_list.back();
+                        else 
+                            node = arg_list.back();
+                    }
+                    /* 
+                    第一個被計算為非 nil 則直接回傳
+                    如果前面都是 nil 則回傳最後一個的值
+                    */
+                    else if (instr == "or") {
+                        if (arg_list.back()->token.type != NIL)
+                            return arg_list.back();
+                        else
+                            node = arg_list.back();
+                    }
+                }
+                catch (Error err) {
+                    if (e == no_return_value) {
+                        e = unbound_condition; // unbound condition
+                        throw Error(unbound_condition, instr, "unbound condition", 0, 0, err.root);
+                    }
+                    else
+                        throw err;
+                }
+
+                t = t->right;
+            }
+        }
+
+        return node;
+    }
+
+    Node_Token* compare_func(string instr, Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
+        Node_Token* node = new Node_Token();
+        pointer_gather.insert(node);
+        vector<Node_Token*> arg_list;
+        bool float_flag = false;
+        node->token.value = "#t";
+        node->token.type = T;
+
+        if (count_args(args) < 2) {
+            e = incorrect_number_of_arguments;
+            throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
+        }
+        else {
+            Node_Token *t = args;
+            while (t != nullptr && t->token.type != NIL) {
+                Node_Token *parameter = t->left;
+                try {
+                    arg_list.push_back(evalution(parameter, e, local_defined_table));
+                }
+                catch (Error err) {
+                    if (e == no_return_value) {
+                        e = unbound_parameter;
+                        throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, err.root);
+                    }
+                    else
+                        throw err;
+                }
+
+                if(arg_list.back()->token.type == FLOAT)
+                    float_flag = true;
+                else if (arg_list.back()->token.type != INT && arg_list.back()->token.type != FLOAT) {
+                    // ERROR (+ with incorrect argument type) : #t
+                    e = incorrect_argument_type;
+                    throw Error(incorrect_argument_type, instr, arg_list.back()->token.value, 0, 0, arg_list.back());
+                }
+                t = t->right;
+            }
+        }
+
+        if (float_flag) {
+            double current = stod(arg_list.at(0)->token.value);
+            for (int i = 1 ; i < arg_list.size() ; i++) {
+                if (instr == "=") {
+                    if (current != stod(arg_list.at(i)->token.value)) {
+                        node->token.value = "#f";
+                        node->token.type = NIL;
+                        return node;
+                    }
+                }
+                else if (instr == "<") {
+                    if (current >= stod(arg_list.at(i)->token.value)) {
+                        node->token.value = "#f";
+                        node->token.type = NIL;
+                        return node;
+                    }
+                }
+                else if (instr == ">") {
+                    if (current <= stod(arg_list.at(i)->token.value)) {
+                        node->token.value = "#f";
+                        node->token.type = NIL;
+                        return node;
+                    }
+                }
+                else if (instr == "<=") {
+                    if (current > stod(arg_list.at(i)->token.value)) {
+                        node->token.value = "#f";
+                        node->token.type = NIL;
+                        return node;
+                    }
+                }
+                else if (instr == ">=") {
+                    if (current < stod(arg_list.at(i)->token.value)) {
+                        node->token.value = "#f";
+                        node->token.type = NIL;
+                        return node;
+                    }
+                }
+                current = stod(arg_list.at(i)->token.value);
+            }
+        }
+        else {
+            int current = stoi(arg_list.at(0)->token.value);
+            for (int i = 1 ; i < arg_list.size() ; i++) {
+                if (instr == "=") {
+                    if (current != stoi(arg_list.at(i)->token.value)) {
+                        node->token.value = "#f";
+                        node->token.type = NIL;
+                        return node;
+                    }
+                }
+                else if (instr == "<") {
+                    if (current >= stoi(arg_list.at(i)->token.value)) {
+                        node->token.value = "#f";
+                        node->token.type = NIL;
+                        return node;
+                    }
+                }
+                else if (instr == ">") {
+                    if (current <= stoi(arg_list.at(i)->token.value)) {
+                        node->token.value = "#f";
+                        node->token.type = NIL;
+                        return node;
+                    }
+                }
+                else if (instr == "<=") {
+                    if (current > stoi(arg_list.at(i)->token.value)) {
+                        node->token.value = "#f";
+                        node->token.type = NIL;
+                        return node;
+                    }
+                }
+                else if (instr == ">=") {
+                    if (current < stoi(arg_list.at(i)->token.value)) {
+                        node->token.value = "#f";
+                        node->token.type = NIL;
+                        return node;
+                    }
+                }
+                current = stoi(arg_list.at(i)->token.value);
+            }
+        }
+
+        return node;
+    }
+    Node_Token* str_operator(string instr, Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
+        Node_Token* node = new Node_Token();
+        pointer_gather.insert(node);
+        vector<Node_Token*> arg_list;
+        node->token.value = "#t";
+        node->token.type = T;
+
+        if (count_args(args) < 2) {
+            e = incorrect_number_of_arguments;
+            throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
+        }
+        else {
+            Node_Token *t = args;
+            while (t != nullptr && t->token.type != NIL) {
+                Node_Token *parameter = t->left;
+                // cerr << "\033[1;35m" << "parameter: " << parameter->token.value << "\033[0m" << endl;
+                try {
+                    arg_list.push_back(evalution(parameter, e, local_defined_table));
+                    if (arg_list.back()->token.type != STRING) {
+                        e = incorrect_argument_type;
+                        throw Error(incorrect_argument_type, instr, arg_list.back()->token.value, 0, 0, arg_list.back());
+                    }
+                }
+                catch (Error err) {
+                    if (e == no_return_value) {
+                        e = unbound_parameter;
+                        throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, err.root);
+                    }
+                    else
+                        throw err;
+                }
+                t = t->right;
+            }
+        }
+
+        for (int i = 0 ; i < arg_list.size() ; i++) {
+            if (instr == "string-append") {
+                if (i == 0) {
+                    node->token.value = arg_list.at(i)->token.value.substr(1, arg_list.at(i)->token.value.size() - 2);
+                    node->token.type = STRING;
+                }
+                else node->token.value += arg_list.at(i)->token.value.substr(1, arg_list.at(i)->token.value.size() - 2);
+
+                if (i == arg_list.size()-1)
+                    node->token.value = "\"" + node->token.value + "\"";
+                
+            }
+            else if (instr == "string>?") {
+                if (i == 0) continue;
+                else {
+                    for (int j = 0 ; j < arg_list.at(i-1)->token.value.size() && j < arg_list.at(i)->token.value.size() ; j++) {
+                        if (arg_list.at(i-1)->token.value[j] < arg_list.at(i)->token.value[j]) {
+                            node->token.value = "#f";
+                            node->token.type = NIL;
+                            return node;
+                        }
+                        else if (arg_list.at(i-1)->token.value[j] > arg_list.at(i)->token.value[j])
+                            break;
+                        
+                    }
+                    if (arg_list.at(i-1)->token.value.size() <= arg_list.at(i)->token.value.size() &&
+                        arg_list.at(i-1)->token.value == arg_list.at(i)->token.value.substr(0, arg_list.at(i-1)->token.value.size())) {
+                        node->token.value = "#f";
+                        node->token.type = NIL;
+                        return node;
+                    }
+                }
+                
+            }
+            else if (instr == "string<?") {
+                if (i == 0) continue;
+                else {
+                    for (int j = 0 ; j < arg_list.at(i-1)->token.value.size() && j < arg_list.at(i)->token.value.size() ; j++) {
+                        if (arg_list.at(i-1)->token.value[j] > arg_list.at(i)->token.value[j]) {
+                            node->token.value = "#f";
+                            node->token.type = NIL;
+                            return node;
+                        }
+                        else if (arg_list.at(i-1)->token.value[j] < arg_list.at(i)->token.value[j])
+                            break;
+                        
+                    }
+                    if (arg_list.at(i-1)->token.value.size() >= arg_list.at(i)->token.value.size() &&
+                        arg_list.at(i-1)->token.value == arg_list.at(i)->token.value.substr(0, arg_list.at(i-1)->token.value.size())) {
+                        node->token.value = "#f";
+                        node->token.type = NIL;
+                        return node;
+                    }
+                    
+                }
+            }
+            else if (instr == "string=?") {
+                if (i == 0) continue;
+                else if (arg_list.at(i)->token.value != arg_list.at(i-1)->token.value) {
+                    node->token.value = "#f";
+                    node->token.type = NIL;
+                    return node;
+                }
+            }
+        }
+
+        return node;
+    }
+
+    Node_Token* eqv(string instr, Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
+        Node_Token* node = new Node_Token();
+        pointer_gather.insert(node);
+        vector<Node_Token*> arg_list;
+        node->token.value = "#t";
+        node->token.type = T;
+
+        if (count_args(args) != 2) {
+            e = incorrect_number_of_arguments;
+            throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
+        }
+        else {
+            Node_Token *t = args;
+            while (t != nullptr && t->token.type != NIL) {
+                Node_Token *parameter = t->left;
+                try {
+                    arg_list.push_back(evalution(parameter, e, local_defined_table));
+                }
+                catch (Error err) {
+                    if (e == no_return_value) {
+                        e = unbound_parameter;
+                        throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, err.root);
+                    }
+                    else
+                        throw err;
+                }
+                t = t->right;
+            }
+        }
+
+        if (!is_equ_address(arg_list.at(0), arg_list.at(1))) {
+            node->token.value = "#f";
+            node->token.type = NIL;
+        }
+
+        return node;
+    }
+    Node_Token* equal(string instr, Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
+        Node_Token* node = new Node_Token();
+        pointer_gather.insert(node);
+        vector<Node_Token*> arg_list;
+        node->token.value = "#t";
+        node->token.type = T;
+
+        if (count_args(args) != 2) {
+            e = incorrect_number_of_arguments;
+            throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
+        }
+        else {
+            Node_Token *t = args;
+            while (t != nullptr && t->token.type != NIL) {
+                Node_Token *parameter = t->left;
+                try {
+                    arg_list.push_back(evalution(parameter, e, local_defined_table));
+                }
+                catch (Error err) {
+                    if (e == no_return_value) {
+                        e = unbound_parameter;
+                        throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, err.root);
+                    }
+                    else
+                        throw err;
+                }
+                t = t->right;
+            }
+        }
+        
+        if (!is_equ(arg_list.at(0), arg_list.at(1))) {
+            node->token.value = "#f";
+            node->token.type = NIL;
+        }
+
+        return node;
+    }
+    Node_Token* begin_func(string instr, Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
+        Node_Token* node;
+        vector<Node_Token*> arg_list;
+
+        if (count_args(args) < 1) {
+            e = incorrect_number_of_arguments;
+            throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
+        }
+        else {
+            // Return the last evaluated argument
+            try {
+                return sequence(args, e, local_defined_table);
+            }
+            catch (Error err) {
+                cerr << "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!" << endl;
+                // if (e == no_return_value) {
+                //     e = unbound_parameter;
+                //     throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, err.root);
+                // }
+                // else
+                    throw err;
+                
+            }
+        }
+
+
+    }
+
+    Node_Token* if_func(string instr, Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
+        vector<Node_Token*> arg_list;
+
+        int c = count_args(args);
+        if (c != 2 && c != 3) {
+            e = incorrect_number_of_arguments;
+            throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
+        }
+        else {
+            // (if 條件式 判斷式 判斷式)
+            Node_Token *judge_elements;
+            
+            try {
+                judge_elements = evalution(args->left, e, local_defined_table);
+                // cout << "\033[1;35m" << "judge_elements: " << judge_elements->token.value << "\033[0m" << endl;
+                // cout << "\033[1;35m" << "judge_elements type: " << judge_elements->token.type << "\033[0m" << endl;
+            }
+            catch (Error err) {
+                if (e == no_return_value) { // 條件式為 no_return_value 回傳 unbound_test_condition
+                    e = unbound_test_condition;
+                    throw Error(unbound_test_condition, instr, "unbound_test_condition", 0, 0, err.root);
+                }
+                else
+                    throw err;
+            }
+            
+            Node_Token *exp = args->right;
+            // while (exp != nullptr && exp->token.type != NIL) {
+            Node_Token *ans;
+            if (c == 2) { 
+                cerr << "\033[1;31m" << "c == 2" << "\033[0m" << endl;
+                // try {
+                //     ans = evalution(exp->left, e, local_defined_table);
+                // }
+                // catch (Error err) {
+                //     throw err;
+                // }
+
+                if (judge_elements->token.type == NIL) {
+                    e = no_return_value;
+                    throw Error(no_return_value, instr, "no_return_value", 0, 0, cur);
+                }
+                // else return ans; // 直接 return right 的執行結果
+                return evalution(exp->left, e, local_defined_table);
+            }
+            else if (c == 3) {
+                cerr << "\033[1;31m" << "c == 3" << "\033[0m" << endl;
+                try {
+                    if (judge_elements->token.type != NIL) {
+                        ans = evalution(exp->left, e, local_defined_table);
+                        return ans;
+                    }
+                    else {
+                        ans = evalution(exp->right->left, e, local_defined_table);
+                        return ans;
+                    } 
+                }
+                catch (Error err) {
+                    throw err;
+                }
+
+            }
+
+        }
+
+        return nullptr;
+    }
+    Node_Token* cond_func(string instr, Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
+        Node_Token* node = new Node_Token();
+        pointer_gather.insert(node);
+
+        int c = count_args(args);
+        if (count_args(args) < 1) {
+            e = error_define_format;
+            throw Error(error_define_format, instr, "cond_func", 0, 0, cur);
+        }
+        
+        Node_Token *t = args;
+        while (t != nullptr && t->token.type != NIL) {
+            int h = 0;
+            if (is_ATOM(t->left->token.type)) {
+                e = error_define_format;
+                throw Error(error_define_format, instr, "cond_func", 0, 0, cur);
+            }
+            else {
+                Node_Token *tmp = t->left;
+                while (tmp != nullptr && tmp->token.type != NIL) {
+                    h++; // increment height
+                    tmp = tmp->right;
+                }
+                if (h < 2) {
+                    e = error_define_format;
+                    throw Error(error_define_format, instr, "cond_func", 0, 0, cur);
+                }
+            }
+            t = t->right;
+        }
+
+        t = args;
+        while (t != nullptr && t->token.type != NIL) {
+            Node_Token *parameter = t->left;
+
+            // 判斷最後的 argument
+            if (t->right->token.type == NIL) {
+                // cerr << "\033[1;35m" << "last argument: " << parameter->left->token.value << "\033[0m" << endl;
+                // try {
+                Node_Token* tmp = parameter->left;
+                if (parameter->left->token.type == DOT) {
+                    try {
+                        tmp = evalution(parameter->left, e, local_defined_table); // 這邊要 evalution 參數的左邊，設 tmp 為了避免改到原本的樹
+                    }
+                    catch (Error err) {
+                        if (e == no_return_value) {
+                            e = unbound_test_condition;
+                            throw Error(unbound_test_condition, instr, "unbound_test_condition", 0, 0, err.root);
+                        }
+                        // else
+                        throw err;
+                    }
+                    
+                }
+                    
+                if (tmp->token.type == SYMBOL && tmp->token.value == "else") {
+                    cerr << "\033[1;36m" << "--------------------- enter else -------------------: " << "\033[0m" << endl;
+                    return sequence(parameter->right, e, local_defined_table); // 直接 return right 的執行結果
+                }
+                else {// 非 else
+                    Node_Token* success;
+                    try {
+                        success = evalution(tmp, e, local_defined_table);
+                    }
+                    catch (Error err) { // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+                        if (e == no_return_value) {
+                            e = unbound_test_condition;
+                            throw Error(unbound_test_condition, instr, "unbound_test_condition", 0, 0, err.root);
+                        }
+                        else
+                            throw err;
+                    }
+                    
+                    // cerr << "\033[1;31m" << "success: " << success->token.value << "\033[0m" << endl;
+                    // cerr << "\033[1;31m" << "success: " << success->token.type << "\033[0m" << endl;
+                    if (success->token.type != NIL)
+                        return sequence(parameter->right, e, local_defined_table);
+                }
+
+            }
+            // 非最後的 argument
+            else {
+                // 可執行
+                Node_Token* success = nullptr;
+                try {
+                    success = evalution(parameter->left, e, local_defined_table);
+                }
+                catch (Error err) {
+                    if (e == no_return_value) {
+                        e = unbound_test_condition;
+                        throw Error(unbound_test_condition, instr, "unbound_test_condition", 0, 0, err.root);
+                    }
+                    else
+                        throw err;
+                }
+                if (success->token.type != NIL) {
+                    cerr << "\033[1;31m" << "success: " << success->token.value << "\033[0m" << endl;
+                    return sequence(parameter->right, e, local_defined_table); // 直接 return right 的執行結果
+                }
+            }
+
+
+            t = t->right;
+        }
+        e = no_return_value;
+        throw Error(no_return_value, instr, "no_return_value", 0, 0, cur);
+    }
+    Node_Token* clean_environment(Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
+        if (cur->parent != nullptr){
+            e = error_level_cleaned;
+            throw Error(error_level_cleaned, "CLEAN-ENVIRONMENT", "CLEAN-ENVIRONMENT", 0, 0);
+        }
+        else if (count_args(args) != 0) {
+            e = incorrect_number_of_arguments;
+            throw Error(incorrect_number_of_arguments, "clean-environment", "incorrect_number_of_arguments", 0, 0);
+        }
+        else {
+            // func.clear();
+            defined_table.clear();
+            clear_pointer_gather();
+            e = cleaned;
+            throw Error(cleaned, "environment cleaned", "lalala", 0, 0);
+        }
+        return nullptr;
+    }
+
+    Node_Token* quote_func(Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
+        if (count_args(args) != 1) {
+            e = incorrect_number_of_arguments;
+            throw Error(incorrect_number_of_arguments, "quote", "incorrect_number_of_arguments", 0, 0);
+        }
+        else 
+            return args->left; // Directly return the quoted expression as is
+        
+    }
+    Node_Token* exit_func(Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
+        if (cur->parent != nullptr){
+            e = error_level_exit;
+            throw Error(error_level_exit, "EXIT", "EXIT", 0, 0);
+        }
+        else if (count_args(args) != 0) {
+            e = incorrect_number_of_arguments;
+            throw Error(incorrect_number_of_arguments, "exit", "incorrect_number_of_arguments", 0, 0);
+        }
+        else {
+            e = UNEXPECTED_EXIT;
+            throw Error(UNEXPECTED_EXIT, "exit", "exit", 0, 0);
+        }
+        return nullptr;
+    }
+
+    Node_Token* verbose_func(string instr, Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
+        Node_Token* node = new Node_Token();
+        pointer_gather.insert(node);
+        node->token.value = "#t";
+        node->token.type = T;
+
+        if (instr == "verbose") {
+            if (count_args(args) != 1) {
+                e = incorrect_number_of_arguments;
+                throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
+            }
+            else {
+                Node_Token *parameter = args->left;
+                try {
+                    Node_Token* left = evalution(parameter, e, local_defined_table);
+                    if (left->token.type == NIL) {
+                        verbose_mode = false;
+                        node->token.value = "#f";
+                        node->token.type = NIL;
+                    }
+                    else verbose_mode = true;
+                }
+                catch (Error err) {
+                    if (e == no_return_value) {
+                        e = unbound_parameter;
+                        throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, err.root);
+                    }
+                    else
+                        throw err;
+                }
+            }
+        }
+        else if (instr == "verbose?") {
+            if (count_args(args) != 0) {
+                e = incorrect_number_of_arguments;
+                throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
+            }
+            else {
+                if (!verbose_mode) {
+                    node->token.value = "#f";
+                    node->token.type = NIL;
+                }
+            }
+        }
+        return node;
+    }
+    
+    Node_Token* err_obj(string instr, Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
+        Node_Token* node = new Node_Token();
+        pointer_gather.insert(node);
+        node->token.value = "#t";
+        node->token.type = T;
+
+        if (count_args(args) != 1) {
+            e = incorrect_number_of_arguments;
+            throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
+        }
+
+        Node_Token *parameter;
+        try{
+            parameter = evalution(args->left, e, local_defined_table);
+        }
+        catch (Error err) {
+            if (e == no_return_value) {
+                e = unbound_parameter;
+                throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, err.root);
+            }
+            else
+                throw err;
+        }
+
+        if (instr == "create-error-object") {
+            if (parameter->token.type != STRING) {
+                e = incorrect_argument_type;
+                throw Error(incorrect_argument_type, instr, parameter->token.value, 0, 0, parameter);
+            }
+
+            node->token.value = parameter->token.value;
+            node->token.type = USERERROR;
+            node->token.is_function = false;
+            node->left = nullptr;
+            node->right = nullptr;
+            node->parent = nullptr;
+
+        }
+        else if (instr == "error-object?") {
+            if (parameter->token.type != USERERROR) {
+                node->token.value = "#f";
+                node->token.type = NIL;
+            }
+        }
+
+        return node;
+
+    }
+    
+    Node_Token* read(Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
+        if (count_args(args) != 0) {
+            e = incorrect_number_of_arguments;
+            throw Error(incorrect_number_of_arguments, "read", "incorrect_number_of_arguments", 0, 0);
+        }
+        Node_Token* node = new Node_Token();
+        pointer_gather.insert(node);
+        
+
+        LexicalAnalyzer Lexical; //詞法分析器
+        SyntaxAnalyzer Syntax; //語法分析器
+
+        // bool is_exit = false;
+        
+        bool finish_input = false;
+        try {
+            // cout << "\n> ";
+            errorType E = Error_None;
+            Lexical.Get_Token(finish_input, E);
+
+            if (finish_input) {
+                // cerr << "\033[1;32mfinish_input\033[0m" << endl;
+                // bulid parser tree
+                cerr << "\033[1;34menter build_tree\033[0m" << endl;
+                Syntax.build_tree(Lexical.tokenBuffer, false);
+                Syntax.set_root();
+                cerr << "\033[1;34mend build_tree\033[0m" << endl;
+                Syntax.print(); // !Debug
+
+                return Syntax.get_root(); // return the root of the parser tree
+            }
+
+        } catch (Error e) {
+            switch (e.type) {
+                case UNEXPECTED_TOKEN:
+                    cerr << "\033[1;31m" << "In read UNEXPECTED_TOKEN" << "\033[0m" << endl;
+                    // cout << e.message << endl;
+                    node->token.type = USERERROR;
+                    node->token.value = e.message;
+                    
+                    break;
+                case UNEXPECTED_CLOSE_PAREN:
+                    cerr << "\033[1;31m" << "In read UNEXPECTED_CLOSE_PAREN" << "\033[0m" << endl;
+                    // cout << e.message << endl;
+                    node->token.type = USERERROR;
+                    node->token.value = e.message;
+                    
+                    break;
+                case UNEXPECTED_END_PAREN:
+                    cerr << "\033[1;31m" << "In read UNEXPECTED_END_PAREN" << "\033[0m" << endl;
+                    // cout << e.message << endl;
+                    node->token.type = USERERROR;
+                    node->token.value = e.message;
+                    
+                    break;
+                case UNEXPECTED_STRING:
+                    cerr << "\033[1;31m" << "In read UNEXPECTED_STRING" << "\033[0m" << endl;
+                    // cout << e.message << endl;
+                    node->token.type = USERERROR;
+                    node->token.value = e.message;
+                    
+                    break;
+                case UNEXPECTED_EOF:
+                    cerr << "\033[1;31m" << "In read UNEXPECTED_EOF" << "\033[0m" << endl;
+                    // cout << e.message << endl;
+                    node->token.type = USERERROR;
+                    node->token.value = e.message;
+                    
+                    break;
+                // case UNEXPECTED_EXIT:
+                //     cerr << "\033[1;31m" << "In read UNEXPECTED_EXIT" << "\033[0m" << endl;
+                //     cout << endl;
+                    
+                //     // is_exit = true;
+                //     break;
+                default:
+                    break;
+            }
+        }
+
+        return node;
+    }
+
+    Node_Token* write(Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
+        if (count_args(args) != 1) {
+            e = incorrect_number_of_arguments;
+            throw Error(incorrect_number_of_arguments, "write", "incorrect_number_of_arguments", 0, 0);
+        }
+        Node_Token* node;
+
+        Node_Token *parameter = args->left;
+        try {
+            node = evalution(parameter, e, local_defined_table);
+            syn.print(node); // Print the evaluated value
+
+            // node->token.value = left->token.value;
+            // node->token.type = left->token.type;
+        }
+        catch (Error err) {
+            if (e == no_return_value) {
+                e = unbound_parameter;
+                throw Error(unbound_parameter, "write", "unbound parameter", 0, 0, err.root);
+            }
+            else
+                throw err;
+        }
+
+        return node; // Return the evaluated value
+    }
+
+    
+    Node_Token* evalution(Node_Token *cur, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
+        // cerr << "-------- enter evalution --------" <<endl;
+        if (cur == nullptr) return nullptr;
+
+        string func_name;
+        vector<Node_Token*> args;
+
+        // Handle atoms
+        if (is_ATOM(cur->token.type)) { //  != DOT &&  != QUOTE
+            if (cur->token.type == SYMBOL) {
+                // cerr << "\033[1;35m" << "---- judge define or not ----\ncur->token.value:" << cur->token.value << "\033[0m" << endl;
+                if (local_defined_table.find(cur->token.value) != local_defined_table.end()) {
+                    return local_defined_table[cur->token.value]; // Return the local bound symbol
+                }
+                else if (defined_table.find(cur->token.value) != defined_table.end()) {
+                    return defined_table[cur->token.value]; // Return the bound symbol
+                }
+                else {
+                    // cerr << "\033[1;35m" << "---- judge failed ----\ncur->token.value:" << cur->token.value << "\033[0m" << endl;
+                    e = unbound_symbol;
+                    throw Error(unbound_symbol, cur->token.value, "unbound symbol", cur->token.line, cur->token.column, cur);
+                }
+            }
+            return cur; // Return the atom itself
+        }
+
+        // judge pure list or not, the rightmost node must be NIL so that can continue
+        // if (...) is not a (pure) list
+        Node_Token *t = cur;
+        while (t != nullptr && t->token.type != NIL) {
+            t = t->right;
+        }
+        if (t == nullptr || t->token.type != NIL) {
+            // cerr << "\033[1;35m" << "--- pure list ---" << "\033[0m" << endl;
+            e = non_list;
+            throw Error(non_list, "non-list", "non-list", 0, 0, cur);
+            // return cur; // Return the atom itself
+        }
+
+        // if first argument of (...) is an atom ☆, which is not a symbol
+        // ERROR (attempt to apply non-function) : ☆
+        Node_Token* func_Token = cur->left;
+        func_name = func_Token->token.value;
+        // cerr << "\033[1;33m" << "func_name: " << func_name << "\033[0m" << endl;
+        // cerr << "\033[1;33m" << "func_Token->token.value: " << func_Token->token.value << "\033[0m" << endl;
+        // cerr << "\033[1;33m" << "func_Token->token.type: " << func_Token->token.type << "\033[0m" << endl;
+
+        if ( is_ATOM(func_Token->token.type) && func_Token->token.type != SYMBOL) {
+            e = undefined_function;
+            throw Error(undefined_function, func_Token->token.value, func_Token->token.value ,func_Token->token.line, func_Token->token.column, func_Token);
+        }
+        else if (func_Token->token.type == SYMBOL || func_Token->token.type == QUOTE) {
+            // cerr << "\033[1;35m" << "is_ATOM(func_Token->token.type): " << func_Token->token.value << "\033[0m" << endl;
+            // if (func_Token->token.type != SYMBOL ) { // || bulid_in_func.find(func_name) == bulid_in_func.end()
+            // }
+            if (local_defined_table.find(func_name) != local_defined_table.end()) { // check whether the first argument is a function
+                // cerr << "\033[1;32m" << "In local_defined_table: " << func_name << "\033[0m" << endl;
+                Node_Token* tmp;
+                if (local_defined_table.find(func_name) != local_defined_table.end()) {
+                    tmp = local_defined_table[func_name]; // get the function token
+                    func_name = local_defined_table[func_name]->token.value;
+                    // cerr << "\033[1;35m" << "is function: " << func_name << "\033[0m" << endl;
+                    // cerr << "\033[1;35m" << "exec: " << func_Token->token.is_function << "\033[0m" << endl;
+                }
+                
+                // not an executable function
+                if (!tmp->token.is_function) {
+                    func_Token->token.value = func_name; // copy the function token
+                    e = undefined_function;
+                    throw Error(undefined_function, func_name, func_name ,func_Token->token.line, func_Token->token.column, tmp);
+                }
+                else {
+                    // cerr << "\033[1;33m" << "********* set the function token to be executable *********"  << endl;
+                    // func_Token->token.is_function = true; // set the function token to be executable
+                }
+            }
+            else if (defined_table.find(func_name) != defined_table.end()) { // check whether the first argument is a function
+                // cerr << "\033[1;32m" << "In defined_table: " << func_name << "\033[0m" << endl;
+                Node_Token* tmp;
+                if (defined_table.find(func_name) != defined_table.end()) {
+                    tmp = defined_table[func_name]; // get the function token
+                    func_name = defined_table[func_name]->token.value;
+                    // cerr << "\033[1;35m" << "is function: " << func_name << "\033[0m" << endl;
+                    // cerr << "\033[1;35m" << "exec: " << func_Token->token.is_function << "\033[0m" << endl;
+                }
+                
+                // not an executable function
+                if (!tmp->token.is_function) {
+                    func_Token->token.value = func_name; // copy the function token
+                    // tmp->left = func_Token->left;
+                    // tmp->right = func_Token->right;
+                    e = undefined_function;
+                    throw Error(undefined_function, func_name, func_name ,func_Token->token.line, func_Token->token.column, tmp);
+                }
+                // else {
+                //     cerr << "\033[1;33m" << "********* set the function token to be executable *********"  << endl;
+                //     // func_Token->token.is_function = true; // set the function token to be executable
+                // }
+            }
+            
+            if (func_name == "create-error-object")
+                return err_obj("create-error-object", cur, cur->right, e, local_defined_table);
+            else if (func_name == "error-object?")
+                return err_obj("error-object?", cur, cur->right, e, local_defined_table);
+            else if (func_name == "read")
+                return read(cur, cur->right, e, local_defined_table);
+            else if (func_name == "write")
+                return write(cur, cur->right, e, local_defined_table);
+            // else if (func_name == "display-string")
+            //     return
+            // else if (func_name == "newline")
+            //     return
+            // else if (func_name == "eval")
+            //     return
+            // else if (func_name == "set!")
+            //     return
+
+
+            
+            else if (func_name == "define")
+                return define_func("define", cur, cur->right, e, local_defined_table);
+            else if (func_name == "cons")
+                return cons("cons", cur, cur->right, e, local_defined_table);
+            else if (func_name == "lambda")
+                return lambda(cur, cur->right, e, local_defined_table);
+            else if (func_name == "let")
+                return let("let", cur, cur->right, e, local_defined_table);
+            
+            else if (func_name == "list")
+                return list_func("list", cur, cur->right, e, local_defined_table);
+            else if (func_name == "car")
+                return car("car", cur, cur->right, e, local_defined_table);
+            else if (func_name == "cdr")
+                return cdr("cdr", cur, cur->right, e, local_defined_table);
+
+            else if (func_name == "atom?")
+                return judge_elements("atom?", cur, cur->right, e, local_defined_table);
+            else if (func_name == "pair?")
+                return judge_elements("pair?", cur, cur->right, e, local_defined_table);
+            else if (func_name == "list?")
+                return judge_elements("list?", cur, cur->right, e, local_defined_table);
+            else if (func_name == "null?")
+                return judge_elements("null?", cur, cur->right, e, local_defined_table);
+            else if (func_name == "integer?")
+                return judge_elements("integer?", cur, cur->right, e, local_defined_table);
+            else if (func_name == "real?")
+                return judge_elements("real?", cur, cur->right, e, local_defined_table);
+            else if (func_name == "number?")
+                return judge_elements("number?", cur, cur->right, e, local_defined_table);
+            else if (func_name == "string?")
+                return judge_elements("string?", cur, cur->right, e, local_defined_table);
+            else if (func_name == "boolean?")
+                return judge_elements("boolean?", cur, cur->right, e, local_defined_table);
+            else if (func_name == "symbol?")
+                return judge_elements("symbol?", cur, cur->right, e, local_defined_table);
+
+            else if (func_name == "+")
+                return implement_arithmetic("+", cur, cur->right, e, local_defined_table);
+            else if (func_name == "-")
+                return implement_arithmetic("-", cur, cur->right, e, local_defined_table);
+            else if (func_name == "*")
+                return implement_arithmetic("*", cur, cur->right, e, local_defined_table);
+            else if (func_name == "/")
+                return implement_arithmetic("/", cur, cur->right, e, local_defined_table);
+
+            else if (func_name == "not")
+                return implement_logical("not", cur, cur->right, e, local_defined_table);
+            else if (func_name == "and")
+                return implement_logical("and", cur, cur->right, e, local_defined_table);
+            else if (func_name == "or")
+                return implement_logical("or", cur, cur->right, e, local_defined_table);
+
+            else if (func_name == "=")
+                return compare_func("=", cur, cur->right, e, local_defined_table);
+            else if (func_name == "<")
+                return compare_func("<", cur, cur->right, e, local_defined_table);
+            else if (func_name == ">")
+                return compare_func(">", cur, cur->right, e, local_defined_table);
+            else if (func_name == "<=")
+                return compare_func("<=", cur, cur->right, e, local_defined_table);
+            else if (func_name == ">=")
+                return compare_func(">=", cur, cur->right, e, local_defined_table);
+
+            else if (func_name == "string-append")
+                return str_operator("string-append", cur, cur->right, e, local_defined_table);
+            else if (func_name == "string>?")
+                return str_operator("string>?", cur, cur->right, e, local_defined_table);
+            else if (func_name == "string<?")
+                return str_operator("string<?", cur, cur->right, e, local_defined_table);
+            else if (func_name == "string=?")
+                return str_operator("string=?", cur, cur->right, e, local_defined_table);
+
+            else if (func_name == "eqv?")
+                return eqv("eqv?", cur, cur->right, e, local_defined_table);
+            else if (func_name == "equal?")
+                return equal("equal?", cur, cur->right, e, local_defined_table);
+            else if (func_name == "begin")
+                return begin_func("begin", cur, cur->right, e, local_defined_table);
+
+            else if (func_name == "if")
+                return if_func("if", cur, cur->right, e, local_defined_table);
+            else if (func_name == "cond")
+                return cond_func("COND", cur, cur->right, e, local_defined_table);
+
+            else if (func_name == "clean-environment")
+                return clean_environment(cur, cur->right, e, local_defined_table);
+            else if (func_name == "quote" || func_Token->token.type == QUOTE) // 
+                return quote_func(cur, cur->right, e, local_defined_table);
+            else if (func_name == "exit")
+                return exit_func(cur, cur->right, e, local_defined_table);
+            else if (func_name == "verbose" || func_name == "verbose?") 
+                return verbose_func(func_name, cur, cur->right, e, local_defined_table);
+                
+            else if (defined_table.find(func_name) != defined_table.end()) {
+                cerr << "-------- self defined function --------\n";
+            //     cerr << "func_name: " << func_name << endl;
+                try {
+                    return self_defined_function(func_name, cur, e, local_defined_table); // execute self defined function
+                }
+                catch (Error err) {
+                    if (e == no_return_value)
+                        throw Error(no_return_value, func_name, err.expected, 0, 0, cur);
+                    throw err;
+                }
+            }
+            else if (local_defined_table.find(func_name) != local_defined_table.end()) {
+                cerr << "-------- self local_defined_table function --------\n";
+            //     cerr << "func_name: " << func_name << endl;
+                try {
+                    return self_defined_function(func_name, cur, e, local_defined_table); // execute self defined function
+                }
+
+                catch (Error err) {
+                    if (e == no_return_value)
+                        throw Error(no_return_value, func_name, err.expected, 0, 0, cur);
+                    throw err;
+                }
+            }
+            
+            else { // undefined function
+                // cerr << "-------- undefined function --------\n";
+                
+                e = unbound_symbol;
+                throw Error(unbound_symbol, func_name, func_name ,func_Token->token.line, func_Token->token.column, cur);
+            }
+
+        }
+        else { // the first argument of ( ... ) is ( 。。。 ), i.e., it is ( ( 。。。 ) ...... )
+            // evaluate ( 。。。 )
+            Node_Token* t;
+            try {
+                t = evalution(func_Token, e, local_defined_table);
+            }
+            catch (Error err) {
+                if (e == no_return_value)
+                    throw Error(no_return_value, func_name, err.expected, 0, 0, err.root);
+                throw err;
+            }
+            cerr << "\033[1;33m" << "--------- judge enter execute_lambda ---------" << "\033[0m" << endl;
+            // if (t != nullptr) {
+            //     cerr << "\033[1;33m" << "t->token.value: " << t->token.value << "\033[0m" << endl;
+            //     cerr << "\033[1;33m" << "t->left->token.type: " << t->left->token.type << "\033[0m" << endl;
+            // }
+            if (t != nullptr && t->token.value == "lambda") {
+                cerr << "\033[1;33m" << "--------- enter execute_lambda ---------" << "\033[0m" << endl;
+                // 若為 lambda function, 則
+                //                  lambda <- t.token
+                //                  /    \
+                //          tmp -> *      * 
+                //               / \    /   \
+                //            arg1 *  body1  *
+                //                / \      /   \
+                //              arg2 nil  body2 nil
+                
+                try {
+                    return execute_lambda(cur, t, cur->right, e, local_defined_table); // execute lambda function
+                }
+                catch (Error err) {
+                    if (e == no_return_value)
+                        throw Error(no_return_value, func_name, err.expected, 0, 0, cur);
+                    throw err;
+                }
+            }
+            
+
+            // check whether the evaluated result (of ( 。。。 )) is an internal function
+            if (local_defined_table.find(t->token.value) != local_defined_table.end()) {
+                // cerr << "\033[1;34m" << "func.find(t->token.value) != func.end(): " << "\033[0m" << endl;
+                Node_Token* node = new Node_Token();
+                node->token.type = DOT;
+                node->token.value = ".";
+                node->left =t;
+                node->right = cur->right;
+                try {
+                    return evalution(node, e, local_defined_table);
+                }
+                catch (Error err) {
+                    if (e == no_return_value)
+                        throw Error(no_return_value, func_name, err.expected, 0, 0, cur);
+                    throw err;
+                }
+            }
+            else if (defined_table.find(t->token.value) != defined_table.end()) {
+                // cerr << "\033[1;34m" << "defined_table.find(t->token.value) != defined_table.end(): " << "\033[0m" << endl;
+                Node_Token* node = new Node_Token();
+                node->token.type = DOT;
+                node->token.value = ".";
+                node->left = defined_table[t->token.value];
+                node->right = cur->right;
+                try {
+                    return evalution(node, e, local_defined_table);
+                }
+                catch (Error err) {
+                    if (e == no_return_value)
+                        throw Error(no_return_value, func_name, err.expected, 0, 0, cur);
+                    throw err;
+                }
+            }
+            else {
+                // lambda ?????
+                e = undefined_function;
+                throw Error(undefined_function, t->token.value, t->token.value ,0, 0, t);
+            }
+
+        }
+        
+        return nullptr;
+    }
+
+
+};
+
+
 
 int main() {
     // func = bulid_in_func;
     push_bulid_in_func_in_defined_table(); // push bulid_in_func to defined_table
     LexicalAnalyzer Lexical; //詞法分析器
-    bool is_Syntax_legal = true;
     SyntaxAnalyzer Syntax; //語法分析器
     bool is_exit = false;
 
@@ -3577,6 +3717,8 @@ int main() {
     
     while (!Lexical.Get_is_EOF() && !is_exit) { // while (true)
         bool finish_input = false;
+        bool encounter_eof;
+        bool buffer_remain;
         try {
             cout << "\n> ";
             errorType E = Error_None;
@@ -3585,21 +3727,22 @@ int main() {
             if (finish_input) {
                 // cerr << "\033[1;32mfinish_input\033[0m" << endl;
                 // bulid parser tree
-                cerr << "\033[1;34menter build_tree\033[0m" << endl;
+                // cerr << "\033[1;34menter build_tree\033[0m" << endl;
                 Syntax.build_tree(Lexical.tokenBuffer);
                 Syntax.set_root();
-                cerr << "\033[1;34mend build_tree\033[0m" << endl;
+                // cerr << "\033[1;34mend build_tree\033[0m" << endl;
                 // Syntax.print(); // !Debug
 
-                cerr << "\033[1;34menter execute\033[0m" << endl;
+                // cerr << "\033[1;34menter execute\033[0m" << endl;
                 FunctionExecutor func_executor;
                 // Node_Token* result = nullptr;
                 unordered_map<string, Node_Token*> local_defined_table;
                 Node_Token* result = func_executor.evalution(Syntax.get_root(), E, local_defined_table);
 
-                cerr << "\033[1;34mend execute\033[0m" << endl;
+                // cerr << "\033[1;34mend execute\033[0m" << endl;
 
                 Syntax.print(result);
+                cout << endl; // Print the result of the evaluation
 
                 Lexical.reset(); // reset lexical vector
             }
@@ -3607,96 +3750,102 @@ int main() {
         } catch (Error e) {
             switch (e.type) {
                 case UNEXPECTED_TOKEN:
-                    cerr << "\033[1;31m" << "UNEXPECTED_TOKEN" << "\033[0m" << endl;
-                    cout << e.message << endl;
+                    // cerr << "\033[1;31m" << "UNEXPECTED_TOKEN" << "\033[0m" << endl;
+                    cout << e.message << endl ;
                     Lexical.reset();
                     break;
                 case UNEXPECTED_CLOSE_PAREN:
-                    cerr << "\033[1;31m" << "UNEXPECTED_CLOSE_PAREN" << "\033[0m" << endl;
+                    // cerr << "\033[1;31m" << "UNEXPECTED_CLOSE_PAREN" << "\033[0m" << endl;
                     cout << e.message << endl;
                     Lexical.reset();
                     break;
                 case UNEXPECTED_END_PAREN:
-                    cerr << "\033[1;31m" << "UNEXPECTED_END_PAREN" << "\033[0m" << endl;
+                    // cerr << "\033[1;31m" << "UNEXPECTED_END_PAREN" << "\033[0m" << endl;
                     cout << e.message << endl;
                     Lexical.reset();
                     break;
                 case UNEXPECTED_STRING:
-                    cerr << "\033[1;31m" << "UNEXPECTED_STRING" << "\033[0m" << endl;
+                    // cerr << "\033[1;31m" << "UNEXPECTED_STRING" << "\033[0m" << endl;
                     cout << e.message << endl;
                     Lexical.reset();
                     break;
                 case UNEXPECTED_EOF:
-                    cerr << "\033[1;31m" << "UNEXPECTED_EOF" << "\033[0m" << endl;
+                    // cerr << "\033[1;31m" << "UNEXPECTED_EOF" << "\033[0m" << endl;
                     cout << e.message << endl;
                     Lexical.reset();
                     break;
                 case UNEXPECTED_EXIT:
-                    cerr << "\033[1;31m" << "UNEXPECTED_EXIT" << "\033[0m" << endl;
+                    // cerr << "\033[1;31m" << "UNEXPECTED_EXIT" << "\033[0m" << endl;
                     cout << endl;
                     Lexical.reset();
                     is_exit = true;
                     break;
                 
                 case incorrect_number_of_arguments:
-                    cerr << "\033[1;31m" << "incorrect_number_of_arguments" << "\033[0m" << endl;
+                    // cerr << "\033[1;31m" << "incorrect_number_of_arguments" << "\033[0m" << endl;
                     cout << e.message << endl;
                     Lexical.reset();
                     break;
                 case incorrect_argument_type:
-                    cerr << "\033[1;31m" << "incorrect_argument_type" << "\033[0m" << endl;
+                    // cerr << "\033[1;31m" << "incorrect_argument_type" << "\033[0m" << endl;
                     cout << e.message;
                     Syntax.print(e.get_sub_error_tree());
+                    cout << "\n";
                     Lexical.reset();
                     break;
                 case undefined_function:
-                    cerr << "\033[1;31m" << "undefined_function" << "\033[0m" << endl;
+                    // cerr << "\033[1;31m" << "undefined_function" << "\033[0m" << endl;
                     cout << e.message;
                     Syntax.print(e.get_sub_error_tree());
+                    cout << "\n";
                     Lexical.reset();
                     break;
                 case unbound_symbol:
-                    cerr << "\033[1;31m" << "unbound_symbol" << "\033[0m" << endl;
+                    // cerr << "\033[1;31m" << "unbound_symbol" << "\033[0m" << endl;
                     cout << e.message << endl;
                     Lexical.reset();
                     break;
                 case unbound_parameter:
-                    cerr << "\033[1;31m" << "unbound_parameter" << "\033[0m" << endl;
+                    // cerr << "\033[1;31m" << "unbound_parameter" << "\033[0m" << endl;
                     cout << e.message;
                     Syntax.print(e.get_sub_error_tree());
+                    cout << "\n";
                     Lexical.reset();
                     break;
                 case no_return_value:
-                    cerr << "\033[1;31m" << "no_return_value" << "\033[0m" << endl;
+                    // cerr << "\033[1;31m" << "no_return_value" << "\033[0m" << endl;
                     cout << e.message;
                     Syntax.print(e.get_sub_error_tree());
+                    cout << "\n";
                     Lexical.reset();
                     break;
                 case no_return_value_inernal:
-                    cerr << "\033[1;31m" << "no_return_value_inernal" << "\033[0m" << endl;
+                    // cerr << "\033[1;31m" << "no_return_value_inernal" << "\033[0m" << endl;
                     cout << e.message;
                     Syntax.print(e.get_sub_error_tree());
+                    cout << "\n";
                     Lexical.reset();
                     break;
                 case unbound_test_condition:
-                    cerr << "\033[1;31m" << "unbound_test_condition" << "\033[0m" << endl;
+                    // cerr << "\033[1;31m" << "unbound_test_condition" << "\033[0m" << endl;
                     cout << e.message;
                     Syntax.print(e.get_sub_error_tree());
+                    cout << "\n";
                     Lexical.reset();
                     break;
                 case unbound_condition:
-                    cerr << "\033[1;31m" << "unbound_condition" << "\033[0m" << endl;
+                    // cerr << "\033[1;31m" << "unbound_condition" << "\033[0m" << endl;
                     cout << e.message;
                     Syntax.print(e.get_sub_error_tree());
                     Lexical.reset();
                     break;
                 case division_by_zero:
-                    cerr << "\033[1;31m" << "division_by_zero" << "\033[0m" << endl;
+                    // cerr << "\033[1;31m" << "division_by_zero" << "\033[0m" << endl;
                     cout << e.message << endl;
                     Lexical.reset();
                     break;
                 case non_list:
-                    cerr << "\033[1;31m" << "non_list" << "\033[0m" << endl;
+                    // cerr << "\033[1;31m" << "non_list" << "\033[0m" << endl;
                     cout << e.message;
                     
                     // Syntax.print(e.get_sub_error_tree());
@@ -3704,35 +3853,36 @@ int main() {
                     Lexical.reset();
                     break;
                 case defined:
-                    cerr << "\033[1;31m" << "defined" << "\033[0m" << endl;
+                    // cerr << "\033[1;31m" << "defined" << "\033[0m" << endl;
                     if (verbose_mode)
                         cout << e.message << endl;
                     Lexical.reset();
                     break;
                 case error_level_define:
-                    cerr << "\033[1;31m" << "error_level_define" << "\033[0m" << endl;
+                    // cerr << "\033[1;31m" << "error_level_define" << "\033[0m" << endl;
                     cout << e.message << endl;
                     Lexical.reset();
                     break;
                 case error_level_cleaned:
-                    cerr << "\033[1;31m" << "error_level_cleaned" << "\033[0m" << endl;
+                    // cerr << "\033[1;31m" << "error_level_cleaned" << "\033[0m" << endl;
                     cout << e.message << endl;
                     Lexical.reset();
                     break;
                 case error_level_exit:
-                    cerr << "\033[1;31m" << "error_level_exit" << "\033[0m" << endl;
+                    // cerr << "\033[1;31m" << "error_level_exit" << "\033[0m" << endl;
                     cout << e.message << endl;
                     Lexical.reset();
                     break;
                 case error_define_format:
-                    cerr << "\033[1;31m" << "error_define_format" << "\033[0m" << endl;
+                    // cerr << "\033[1;31m" << "error_define_format" << "\033[0m" << endl;
                     cout << e.message;
                     Syntax.print(e.get_sub_error_tree());
+                    cout << "\n";
                     Lexical.reset();
                     break;
                 
                 case cleaned:
-                    cerr << "\033[1;31m" << "cleaned" << "\033[0m" << endl;
+                    // cerr << "\033[1;31m" << "cleaned" << "\033[0m" << endl;
                     if (verbose_mode)
                         cout << e.message << endl;
                     push_bulid_in_func_in_defined_table();
