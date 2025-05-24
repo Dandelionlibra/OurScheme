@@ -200,6 +200,7 @@ class FunctionExecutor {
             count++;
         }
         // cerr << "\033[1;35m" << "count_args: " << count << "\033[0m" << endl;
+        // cerr << "\033[1;35m-----------------------------------\033[0m" << endl;
         return count;
     }
     bool is_ATOM(TokenType type) {
@@ -405,28 +406,41 @@ class FunctionExecutor {
     }
 
     Node_Token* self_defined_function(string instr, Node_Token *cur, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
-        // cerr << "\033[1;33m" << "--------- enter self_defined_function ---------" << "\033[0m" << endl;
+        cerr << "\033[1;33m" << "--------- enter self_defined_function ---------" << "\033[0m" << endl;
         Node_Token* node;
         vector<Node_Token*> arg_list;
         unordered_map<string, Node_Token*> new_table; // = local_defined_table
 
         // *defined local variable
         Node_Token* func_name = cur->left; // function name
+        string func_name_str;
         Node_Token* func_args; // 參數列表
         Node_Token* func_exprs; // 表達式列表
         if (local_defined_table.find(func_name->token.value) != local_defined_table.end()) {
             func_args = local_defined_table[func_name->token.value]->left;
             func_exprs = local_defined_table[func_name->token.value]->right;
+            func_name_str = local_defined_table[func_name->token.value]->token.value;
         }
         else if (defined_table.find(func_name->token.value) != defined_table.end()) {
             func_args = defined_table[func_name->token.value]->left;
             func_exprs = defined_table[func_name->token.value]->right;
+            func_name_str = defined_table[func_name->token.value]->token.value;
         }
         else {
             e = undefined_function;
             throw Error(undefined_function, func_name->token.value, "undefined function", 0, 0, cur);
         }
         
+        // count args
+        // cerr << "\033[1;31mstart counting \033[0m" << endl;
+        if (count_args(func_args) != count_args(cur->right)) { // 兩個以上參數
+            e = incorrect_number_of_arguments;
+            throw Error(incorrect_number_of_arguments, func_name_str, "incorrect_number_of_arguments", 0, 0, cur);
+        }
+        // cerr << "\033[1;31mend counting \033[0m" << endl;
+        
+
+
         Node_Token* args = cur->right;
         // lambda_args->token.type != NIL && lambda_args != nullptr && defined_args->token.type != NIL && defined_args != nullptr
         // cerr << "\033[1;32m" << " *** test1 *** "  << "\033[0m" << endl;
@@ -441,7 +455,7 @@ class FunctionExecutor {
                 // cerr << "\033[1;35m" << "error: " << error << "\033[0m" << endl;
                 if (e == no_return_value) {
                     e = unbound_parameter;
-                    throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, args->left);
+                    throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, err.root);
                 }
                 else
                     throw err;
@@ -473,18 +487,18 @@ class FunctionExecutor {
             throw Error(incorrect_number_of_arguments, func_name_str, "incorrect_number_of_arguments", 0, 0, cur);
         }
         // cerr << "\033[1;32m" << " *** test2 *** "  << "\033[0m" << endl;
-        try {
-            node = sequence(func_exprs, e, new_table);
-        }
-        catch (Error err) {
-            if (e == no_return_value) {
-                // e = no_return_value_inernal;
-                throw Error(no_return_value, func_name->token.value, "no return value", 0, 0, cur);
-            }
+        // try {
+            return sequence(func_exprs, e, new_table);
+        // }
+        // catch (Error err) {
+        //     if (e == no_return_value) {
+        //         // e = no_return_value_inernal;
+        //         throw Error(no_return_value, func_name->token.value, "no return value", 0, 0, cur);
+        //     }
             
-            throw err;
-        }
-        return node;
+        //     throw Error(err.type, err.expected, err.message, 0, 0, cur);
+        // }
+        // return node;
     }
 
     Node_Token* cons(string instr, Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
@@ -508,7 +522,7 @@ class FunctionExecutor {
                     // cerr << "\033[1;35m" << "error: " << error << "\033[0m" << endl;
                     if (e == no_return_value) {
                         e = unbound_parameter;
-                        throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, parameter);
+                        throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, err.root);
                     }
                     else
                         throw err;
@@ -647,7 +661,17 @@ class FunctionExecutor {
         
         while (defined_args->token.type != NIL && defined_args != nullptr) {
             // cerr << "\033[1;35m" << "lambda_args: " << lambda_args->left->token.value << "\033[0m" << endl;
-            arg_list.push_back(evalution(defined_args->left, e, local_defined_table));
+            try {
+                arg_list.push_back(evalution(defined_args->left, e, local_defined_table));
+            }
+            catch (Error err) {
+                if (e == no_return_value) {
+                    e = unbound_parameter;
+                    throw Error(unbound_parameter, defined_args->left->token.value, "unbound_parameter", 0, 0, err.root);
+                }
+
+                throw err;
+            }
             defined_args = defined_args->right;
         }
 
@@ -664,6 +688,7 @@ class FunctionExecutor {
         }
 
         if (lambda_args->token.type != NIL) {
+            if (e != Error_None) 
             e = incorrect_number_of_arguments;
             throw Error(incorrect_number_of_arguments, lambda->token.value, "incorrect_number_of_arguments", 0, 0, lambda);
         }
@@ -737,18 +762,18 @@ class FunctionExecutor {
 
         Node_Token* other_arg = args->right;
 
-        try {
-            node = sequence(other_arg, e, new_table);
-        }
-        catch (Error err) {
-            if (e == no_return_value) {
-                // e = no_return_value_inernal;
-                throw Error(no_return_value, other_arg->token.value, "no return value", 0, 0, cur);
-            }
+        // try {
+            return sequence(other_arg, e, new_table);
+        // }
+        // catch (Error err) {
+        //     if (e == no_return_value) {
+        //         // e = no_return_value_inernal;
+        //         throw Error(no_return_value, other_arg->token.value, "no return value", 0, 0, cur);
+        //     }
             
-            throw err;
-        }
-        return node;
+        //     throw err;
+        // }
+        // return node;
         /*
         while (other_arg != nullptr && other_arg->token.type != NIL) {
             Node_Token* arg = other_arg->left;
@@ -803,7 +828,7 @@ class FunctionExecutor {
                 catch (Error err) {
                     if (e == no_return_value) {
                         e = unbound_parameter;
-                        throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, parameter);
+                        throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, err.root);
                     }
                     else
                         throw err;
@@ -844,7 +869,7 @@ class FunctionExecutor {
             catch (Error err) {
                 if (e == no_return_value) {
                     e = unbound_parameter;
-                    throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, parameter);
+                    throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, err.root);
                 }
                 else
                     throw err;
@@ -874,7 +899,7 @@ class FunctionExecutor {
             catch (Error err) {
                 if (e == no_return_value) {
                     e = unbound_parameter;
-                    throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, parameter);
+                    throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, err.root);
                 }
                 else
                     throw err;
@@ -910,7 +935,7 @@ class FunctionExecutor {
                 catch (Error err) {
                     if (e == no_return_value) {
                         e = unbound_parameter;
-                        throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, parameter);
+                        throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, err.root);
                     }
                     else
                         throw err;
@@ -1007,7 +1032,7 @@ class FunctionExecutor {
                         if (parameter->left->token.type == DOT)
                             throw err;
                         e = unbound_parameter;
-                        throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, parameter);
+                        throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, err.root);
                     }
                     else
                         throw err;
@@ -1126,7 +1151,7 @@ class FunctionExecutor {
                 catch (Error err) {
                     if (e == no_return_value) {
                         e = unbound_condition; // unbound condition
-                        throw Error(unbound_condition, instr, "unbound condition", 0, 0, parameter);
+                        throw Error(unbound_condition, instr, "unbound condition", 0, 0, err.root);
                     }
                     else
                         throw err;
@@ -1161,7 +1186,7 @@ class FunctionExecutor {
                 catch (Error err) {
                     if (e == no_return_value) {
                         e = unbound_parameter;
-                        throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, parameter);
+                        throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, err.root);
                     }
                     else
                         throw err;
@@ -1289,7 +1314,7 @@ class FunctionExecutor {
                 catch (Error err) {
                     if (e == no_return_value) {
                         e = unbound_parameter;
-                        throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, parameter);
+                        throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, err.root);
                     }
                     else
                         throw err;
@@ -1388,7 +1413,7 @@ class FunctionExecutor {
                 catch (Error err) {
                     if (e == no_return_value) {
                         e = unbound_parameter;
-                        throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, parameter);
+                        throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, err.root);
                     }
                     else
                         throw err;
@@ -1425,7 +1450,7 @@ class FunctionExecutor {
                 catch (Error err) {
                     if (e == no_return_value) {
                         e = unbound_parameter;
-                        throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, parameter);
+                        throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, err.root);
                     }
                     else
                         throw err;
@@ -1456,10 +1481,11 @@ class FunctionExecutor {
             }
             catch (Error err) {
                 cerr << "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!" << endl;
-                if (e == no_return_value) {
-                    throw Error(no_return_value, instr, "unbound parameter", 0, 0, cur);
-                }
-                else
+                // if (e == no_return_value) {
+                //     e = unbound_parameter;
+                //     throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, err.root);
+                // }
+                // else
                     throw err;
                 
             }
@@ -1488,7 +1514,7 @@ class FunctionExecutor {
             catch (Error err) {
                 if (e == no_return_value) { // 條件式為 no_return_value 回傳 unbound_test_condition
                     e = unbound_test_condition;
-                    throw Error(unbound_test_condition, instr, "unbound_test_condition", 0, 0, args->left);
+                    throw Error(unbound_test_condition, instr, "unbound_test_condition", 0, 0, err.root);
                 }
                 else
                     throw err;
@@ -1580,9 +1606,9 @@ class FunctionExecutor {
                         tmp = evalution(parameter->left, e, local_defined_table); // 這邊要 evalution 參數的左邊，設 tmp 為了避免改到原本的樹
                     }
                     catch (Error err) {
-                        if (err.type == no_return_value) {
+                        if (e == no_return_value) {
                             e = unbound_test_condition;
-                            throw Error(unbound_test_condition, instr, "unbound_test_condition", 0, 0, parameter->left);
+                            throw Error(unbound_test_condition, instr, "unbound_test_condition", 0, 0, err.root);
                         }
                         // else
                         throw err;
@@ -1602,7 +1628,7 @@ class FunctionExecutor {
                     catch (Error err) { // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
                         if (e == no_return_value) {
                             e = unbound_test_condition;
-                            throw Error(unbound_test_condition, instr, "unbound_test_condition", 0, 0, tmp);
+                            throw Error(unbound_test_condition, instr, "unbound_test_condition", 0, 0, err.root);
                         }
                         else
                             throw err;
@@ -1625,7 +1651,7 @@ class FunctionExecutor {
                 catch (Error err) {
                     if (e == no_return_value) {
                         e = unbound_test_condition;
-                        throw Error(unbound_test_condition, instr, "unbound_test_condition", 0, 0, parameter->left);
+                        throw Error(unbound_test_condition, instr, "unbound_test_condition", 0, 0, err.root);
                     }
                     else
                         throw err;
@@ -1711,7 +1737,7 @@ class FunctionExecutor {
                 catch (Error err) {
                     if (e == no_return_value) {
                         e = unbound_parameter;
-                        throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, parameter);
+                        throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, err.root);
                     }
                     else
                         throw err;
@@ -1751,7 +1777,7 @@ class FunctionExecutor {
         catch (Error err) {
             if (e == no_return_value) {
                 e = unbound_parameter;
-                throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, args->left);
+                throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, err.root);
             }
             else
                 throw err;
@@ -1987,9 +2013,29 @@ class FunctionExecutor {
                 return verbose_func(func_name, cur, cur->right, e, local_defined_table);
                 
             else if (defined_table.find(func_name) != defined_table.end()) {
-            //     cerr << "-------- self defined function --------\n";
+                cerr << "-------- self defined function --------\n";
             //     cerr << "func_name: " << func_name << endl;
-                return self_defined_function(func_name, cur, e, local_defined_table); // execute self defined function
+                try {
+                    return self_defined_function(func_name, cur, e, local_defined_table); // execute self defined function
+                }
+                catch (Error err) {
+                    if (e == no_return_value)
+                        throw Error(no_return_value, func_name, err.expected, 0, 0, cur);
+                    throw err;
+                }
+            }
+            else if (local_defined_table.find(func_name) != local_defined_table.end()) {
+                cerr << "-------- self local_defined_table function --------\n";
+            //     cerr << "func_name: " << func_name << endl;
+                try {
+                    return self_defined_function(func_name, cur, e, local_defined_table); // execute self defined function
+                }
+
+                catch (Error err) {
+                    if (e == no_return_value)
+                        throw Error(no_return_value, func_name, err.expected, 0, 0, cur);
+                    throw err;
+                }
             }
             
             else { // undefined function
@@ -2002,7 +2048,15 @@ class FunctionExecutor {
         }
         else { // the first argument of ( ... ) is ( 。。。 ), i.e., it is ( ( 。。。 ) ...... )
             // evaluate ( 。。。 )
-            Node_Token* t = evalution(func_Token, e, local_defined_table);
+            Node_Token* t;
+            try {
+                t = evalution(func_Token, e, local_defined_table);
+            }
+            catch (Error err) {
+                if (e == no_return_value)
+                    throw Error(no_return_value, func_name, err.expected, 0, 0, err.root);
+                throw err;
+            }
             cerr << "\033[1;33m" << "--------- judge enter execute_lambda ---------" << "\033[0m" << endl;
             // if (t != nullptr) {
             //     cerr << "\033[1;33m" << "t->token.value: " << t->token.value << "\033[0m" << endl;
@@ -2018,7 +2072,15 @@ class FunctionExecutor {
                 //            arg1 *  body1  *
                 //                / \      /   \
                 //              arg2 nil  body2 nil
-                return execute_lambda(t, cur->right, e, local_defined_table); // execute lambda function
+                
+                try {
+                    return execute_lambda(t, cur->right, e, local_defined_table); // execute lambda function
+                }
+                catch (Error err) {
+                    if (e == no_return_value)
+                        throw Error(no_return_value, func_name, err.expected, 0, 0, cur);
+                    throw err;
+                }
             }
             
 
@@ -2030,7 +2092,14 @@ class FunctionExecutor {
                 node->token.value = ".";
                 node->left =t;
                 node->right = cur->right;
-                return evalution(node, e, local_defined_table);
+                try {
+                    return evalution(node, e, local_defined_table);
+                }
+                catch (Error err) {
+                    if (e == no_return_value)
+                        throw Error(no_return_value, func_name, err.expected, 0, 0, cur);
+                    throw err;
+                }
             }
             else if (defined_table.find(t->token.value) != defined_table.end()) {
                 // cerr << "\033[1;34m" << "defined_table.find(t->token.value) != defined_table.end(): " << "\033[0m" << endl;
@@ -2039,7 +2108,14 @@ class FunctionExecutor {
                 node->token.value = ".";
                 node->left = defined_table[t->token.value];
                 node->right = cur->right;
-                return evalution(node, e, local_defined_table);
+                try {
+                    return evalution(node, e, local_defined_table);
+                }
+                catch (Error err) {
+                    if (e == no_return_value)
+                        throw Error(no_return_value, func_name, err.expected, 0, 0, cur);
+                    throw err;
+                }
             }
             else {
                 // lambda ?????
@@ -3185,7 +3261,7 @@ public:
             else if (is_comment(c_peek)) {
                 string comment = "";
                 read_whole_string(comment, error, ';');
-                cerr << "\033[1;32mcomment: " << comment << "\033[0m" << endl;
+                // cerr << "\033[1;32mcomment: " << comment << "\033[0m" << endl;
 
                 if (error == UNEXPECTED_EOF) {
                     set_token_line_and_column(tmptoken, 0, 0, "eof");
@@ -3322,7 +3398,7 @@ public:
         while(!finish_input);
   
         if (finish_input) {
-            cerr << "\033[1;32mfinish_input\033[0m" << endl;
+            // cerr << "\033[1;32mfinish_input\033[0m" << endl;
             // print_vector(tokenBuffer);
 
             while (true) {
@@ -3330,24 +3406,24 @@ public:
 
                 if (c_peek == EOF) {
                     // is_EOF = true;
-                    cerr << "after finish_input, throw error UNEXPECTED_EOF" << endl;
+                    // cerr << "after finish_input, throw error UNEXPECTED_EOF" << endl;
                     // c_peek = getchar(); // skip the EOF
                     // ungetc(c_peek, stdin); // push EOF back to the buffer
                     return; // 交給下次呼叫 get_token() 處理此 EOF，因為要先建樹
                 }
                 else if (is_enter(c_peek)) {
-                    cerr << "after finish_input, is_enter" << endl;
+                    // cerr << "after finish_input, is_enter" << endl;
                     getchar(); // skip the char of '\n'}
                     return;
                 }
                 else if (is_space(c_peek)) {
-                    cerr << "after finish_input, is_space" << endl;
+                    // cerr << "after finish_input, is_space" << endl;
                     start_column++;
                     getchar(); // skip the char of ' '
                     continue;
                 }
                 else if (is_comment(c_peek)) {
-                    cerr << "after finish_input, is_comment" << endl;
+                    // cerr << "after finish_input, is_comment" << endl;
                     string trash;
                     getline(cin, trash);
                     for (char c : trash) {
@@ -3356,11 +3432,11 @@ public:
                     }
                     start_column = 1;
         
-                    cerr << "\033[1;33mthrow trash in get_token: " << trash << "\033[0m" << endl;
+                    // cerr << "\033[1;33mthrow trash in get_token: " << trash << "\033[0m" << endl;
                     return;
                 }
                 else {
-                    cerr << "\033[1;31m"<< "c_peek: " << c_peek << "\033[0m" << endl;
+                    // cerr << "\033[1;31m"<< "c_peek: " << c_peek << "\033[0m" << endl;
                     return;
                 }
 
@@ -3512,19 +3588,19 @@ int main() {
             if (finish_input) {
                 // cerr << "\033[1;32mfinish_input\033[0m" << endl;
                 // bulid parser tree
-                cerr << "\033[1;34menter build_tree\033[0m" << endl;
+                // cerr << "\033[1;34menter build_tree\033[0m" << endl;
                 Syntax.build_tree(Lexical.tokenBuffer);
                 Syntax.set_root();
-                cerr << "\033[1;34mend build_tree\033[0m" << endl;
+                // cerr << "\033[1;34mend build_tree\033[0m" << endl;
                 // Syntax.print(); // !Debug
 
-                cerr << "\033[1;34menter execute\033[0m" << endl;
+                // cerr << "\033[1;34menter execute\033[0m" << endl;
                 FunctionExecutor func_executor;
                 // Node_Token* result = nullptr;
                 unordered_map<string, Node_Token*> local_defined_table;
                 Node_Token* result = func_executor.evalution(Syntax.get_root(), E, local_defined_table);
 
-                cerr << "\033[1;34mend execute\033[0m" << endl;
+                // cerr << "\033[1;34mend execute\033[0m" << endl;
 
                 Syntax.print(result);
 
@@ -3534,96 +3610,96 @@ int main() {
         } catch (Error e) {
             switch (e.type) {
                 case UNEXPECTED_TOKEN:
-                    cerr << "\033[1;31m" << "UNEXPECTED_TOKEN" << "\033[0m" << endl;
+                    // cerr << "\033[1;31m" << "UNEXPECTED_TOKEN" << "\033[0m" << endl;
                     cout << e.message << endl;
                     Lexical.reset();
                     break;
                 case UNEXPECTED_CLOSE_PAREN:
-                    cerr << "\033[1;31m" << "UNEXPECTED_CLOSE_PAREN" << "\033[0m" << endl;
+                    // cerr << "\033[1;31m" << "UNEXPECTED_CLOSE_PAREN" << "\033[0m" << endl;
                     cout << e.message << endl;
                     Lexical.reset();
                     break;
                 case UNEXPECTED_END_PAREN:
-                    cerr << "\033[1;31m" << "UNEXPECTED_END_PAREN" << "\033[0m" << endl;
+                    // cerr << "\033[1;31m" << "UNEXPECTED_END_PAREN" << "\033[0m" << endl;
                     cout << e.message << endl;
                     Lexical.reset();
                     break;
                 case UNEXPECTED_STRING:
-                    cerr << "\033[1;31m" << "UNEXPECTED_STRING" << "\033[0m" << endl;
+                    // cerr << "\033[1;31m" << "UNEXPECTED_STRING" << "\033[0m" << endl;
                     cout << e.message << endl;
                     Lexical.reset();
                     break;
                 case UNEXPECTED_EOF:
-                    cerr << "\033[1;31m" << "UNEXPECTED_EOF" << "\033[0m" << endl;
+                    // cerr << "\033[1;31m" << "UNEXPECTED_EOF" << "\033[0m" << endl;
                     cout << e.message << endl;
                     Lexical.reset();
                     break;
                 case UNEXPECTED_EXIT:
-                    cerr << "\033[1;31m" << "UNEXPECTED_EXIT" << "\033[0m" << endl;
+                    // cerr << "\033[1;31m" << "UNEXPECTED_EXIT" << "\033[0m" << endl;
                     cout << endl;
                     Lexical.reset();
                     is_exit = true;
                     break;
                 
                 case incorrect_number_of_arguments:
-                    cerr << "\033[1;31m" << "incorrect_number_of_arguments" << "\033[0m" << endl;
+                    // cerr << "\033[1;31m" << "incorrect_number_of_arguments" << "\033[0m" << endl;
                     cout << e.message << endl;
                     Lexical.reset();
                     break;
                 case incorrect_argument_type:
-                    cerr << "\033[1;31m" << "incorrect_argument_type" << "\033[0m" << endl;
+                    // cerr << "\033[1;31m" << "incorrect_argument_type" << "\033[0m" << endl;
                     cout << e.message;
                     Syntax.print(e.get_sub_error_tree());
                     Lexical.reset();
                     break;
                 case undefined_function:
-                    cerr << "\033[1;31m" << "undefined_function" << "\033[0m" << endl;
+                    // cerr << "\033[1;31m" << "undefined_function" << "\033[0m" << endl;
                     cout << e.message;
                     Syntax.print(e.get_sub_error_tree());
                     Lexical.reset();
                     break;
                 case unbound_symbol:
-                    cerr << "\033[1;31m" << "unbound_symbol" << "\033[0m" << endl;
+                    // cerr << "\033[1;31m" << "unbound_symbol" << "\033[0m" << endl;
                     cout << e.message << endl;
                     Lexical.reset();
                     break;
                 case unbound_parameter:
-                    cerr << "\033[1;31m" << "unbound_parameter" << "\033[0m" << endl;
+                    // cerr << "\033[1;31m" << "unbound_parameter" << "\033[0m" << endl;
                     cout << e.message;
                     Syntax.print(e.get_sub_error_tree());
                     Lexical.reset();
                     break;
                 case no_return_value:
-                    cerr << "\033[1;31m" << "no_return_value" << "\033[0m" << endl;
+                    // cerr << "\033[1;31m" << "no_return_value" << "\033[0m" << endl;
                     cout << e.message;
                     Syntax.print(e.get_sub_error_tree());
                     Lexical.reset();
                     break;
                 case no_return_value_inernal:
-                    cerr << "\033[1;31m" << "no_return_value_inernal" << "\033[0m" << endl;
+                    // cerr << "\033[1;31m" << "no_return_value_inernal" << "\033[0m" << endl;
                     cout << e.message;
                     Syntax.print(e.get_sub_error_tree());
                     Lexical.reset();
                     break;
                 case unbound_test_condition:
-                    cerr << "\033[1;31m" << "unbound_test_condition" << "\033[0m" << endl;
+                    // cerr << "\033[1;31m" << "unbound_test_condition" << "\033[0m" << endl;
                     cout << e.message;
                     Syntax.print(e.get_sub_error_tree());
                     Lexical.reset();
                     break;
                 case unbound_condition:
-                    cerr << "\033[1;31m" << "unbound_condition" << "\033[0m" << endl;
+                    // cerr << "\033[1;31m" << "unbound_condition" << "\033[0m" << endl;
                     cout << e.message;
                     Syntax.print(e.get_sub_error_tree());
                     Lexical.reset();
                     break;
                 case division_by_zero:
-                    cerr << "\033[1;31m" << "division_by_zero" << "\033[0m" << endl;
+                    // cerr << "\033[1;31m" << "division_by_zero" << "\033[0m" << endl;
                     cout << e.message << endl;
                     Lexical.reset();
                     break;
                 case non_list:
-                    cerr << "\033[1;31m" << "non_list" << "\033[0m" << endl;
+                    // cerr << "\033[1;31m" << "non_list" << "\033[0m" << endl;
                     cout << e.message;
                     
                     // Syntax.print(e.get_sub_error_tree());
@@ -3631,35 +3707,35 @@ int main() {
                     Lexical.reset();
                     break;
                 case defined:
-                    cerr << "\033[1;31m" << "defined" << "\033[0m" << endl;
+                    // cerr << "\033[1;31m" << "defined" << "\033[0m" << endl;
                     if (verbose_mode)
                         cout << e.message << endl;
                     Lexical.reset();
                     break;
                 case error_level_define:
-                    cerr << "\033[1;31m" << "error_level_define" << "\033[0m" << endl;
+                    // cerr << "\033[1;31m" << "error_level_define" << "\033[0m" << endl;
                     cout << e.message << endl;
                     Lexical.reset();
                     break;
                 case error_level_cleaned:
-                    cerr << "\033[1;31m" << "error_level_cleaned" << "\033[0m" << endl;
+                    // cerr << "\033[1;31m" << "error_level_cleaned" << "\033[0m" << endl;
                     cout << e.message << endl;
                     Lexical.reset();
                     break;
                 case error_level_exit:
-                    cerr << "\033[1;31m" << "error_level_exit" << "\033[0m" << endl;
+                    // cerr << "\033[1;31m" << "error_level_exit" << "\033[0m" << endl;
                     cout << e.message << endl;
                     Lexical.reset();
                     break;
                 case error_define_format:
-                    cerr << "\033[1;31m" << "error_define_format" << "\033[0m" << endl;
+                    // cerr << "\033[1;31m" << "error_define_format" << "\033[0m" << endl;
                     cout << e.message;
                     Syntax.print(e.get_sub_error_tree());
                     Lexical.reset();
                     break;
                 
                 case cleaned:
-                    cerr << "\033[1;31m" << "cleaned" << "\033[0m" << endl;
+                    // cerr << "\033[1;31m" << "cleaned" << "\033[0m" << endl;
                     if (verbose_mode)
                         cout << e.message << endl;
                     push_bulid_in_func_in_defined_table();
