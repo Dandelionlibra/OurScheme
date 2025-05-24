@@ -487,17 +487,17 @@ class FunctionExecutor {
             throw Error(incorrect_number_of_arguments, func_name_str, "incorrect_number_of_arguments", 0, 0, cur);
         }
         // cerr << "\033[1;32m" << " *** test2 *** "  << "\033[0m" << endl;
-        // try {
+        try {
             return sequence(func_exprs, e, new_table);
-        // }
-        // catch (Error err) {
-        //     if (e == no_return_value) {
-        //         // e = no_return_value_inernal;
-        //         throw Error(no_return_value, func_name->token.value, "no return value", 0, 0, cur);
-        //     }
+        }
+        catch (Error err) {
+            if (e == no_return_value) {
+                // e = no_return_value_inernal;
+                throw Error(no_return_value, func_name->token.value, "no return value", 0, 0, func_exprs);
+            }
             
-        //     throw Error(err.type, err.expected, err.message, 0, 0, cur);
-        // }
+            throw Error(err.type, err.expected, err.message, 0, 0, err.root);
+        }
         // return node;
     }
 
@@ -562,7 +562,7 @@ class FunctionExecutor {
                     //            arg1 *  body1  *
                     //                / \      /   \
                     //              arg2 nil  body2 nil
-                    return execute_lambda(t, cur->right, e, local_defined_table); // execute lambda function
+                    return execute_lambda(cur, t, cur->right, e, local_defined_table); // execute lambda function
                 }
             }
         }
@@ -583,7 +583,7 @@ class FunctionExecutor {
                     //            arg1 *  body1  *
                     //                / \      /   \
                     //              arg2 nil  body2 nil
-                    return execute_lambda(t, cur->right, e, local_defined_table); // execute lambda function
+                    return execute_lambda(cur, t, cur->right, e, local_defined_table); // execute lambda function
                 }
             }
         }
@@ -642,7 +642,7 @@ class FunctionExecutor {
 
         return node;
     }
-    Node_Token* execute_lambda(Node_Token *lambda, Node_Token *defined_args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
+    Node_Token* execute_lambda(Node_Token *cur, Node_Token *lambda, Node_Token *defined_args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
         cerr << "\033[1;33m" << "--------- enter execute_lambda ---------" << "\033[0m" << endl;
         Node_Token* node;
         vector<Node_Token*> arg_list;
@@ -694,7 +694,17 @@ class FunctionExecutor {
         }
 
 
-        return sequence(lambda->right, e, new_table);
+        try {
+            return sequence(lambda->right, e, new_table);
+        }
+        catch (Error err) {
+            if (e == no_return_value) {
+                // e = no_return_value_inernal;
+                throw Error(no_return_value, lambda->token.value, "no return value", 0, 0, cur);
+            }
+            
+            throw Error(err.type, err.expected, err.message, 0, 0, err.root);
+        }
     }
     
     Node_Token* let(string instr, Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
@@ -762,44 +772,17 @@ class FunctionExecutor {
 
         Node_Token* other_arg = args->right;
 
-        // try {
+        try {
             return sequence(other_arg, e, new_table);
-        // }
-        // catch (Error err) {
-        //     if (e == no_return_value) {
-        //         // e = no_return_value_inernal;
-        //         throw Error(no_return_value, other_arg->token.value, "no return value", 0, 0, cur);
-        //     }
+        }
+        catch (Error err) {
+            if (e == no_return_value) {
+                // e = no_return_value_inernal;
+                throw Error(no_return_value, other_arg->token.value, "no return value", 0, 0, cur);
+            }
             
-        //     throw err;
-        // }
-        // return node;
-        /*
-        while (other_arg != nullptr && other_arg->token.type != NIL) {
-            Node_Token* arg = other_arg->left;
-            try {
-                node = evalution(arg, e, new_table);
-            }
-            catch (Error err) {
-                // cerr << "\033[1;31m" << "******* 2. let error *******" << "\033[0m" << endl;
-                if (e == no_return_value) {
-                    if (other_arg->right == nullptr || other_arg->right->token.type == NIL){
-                        // e = no_return_value_inernal;
-                        throw Error(no_return_value, instr, "no_return_value", 0, 0, cur); // arg->right->left
-                        // throw err; // If it's the last s-exp
-                    }
-                    else e = Error_None; // otherwise, ignore the error
-                }
-                else
-                    throw err;
-            }
-
-            other_arg = other_arg->right;
-        }*/
-
-        
-
-        // return node;
+            throw Error(err.type, err.expected, err.message, 0, 0, err.root);
+        }
     }
     // ! (list '(4 5))
     Node_Token* list_func(string instr, Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
@@ -2074,7 +2057,7 @@ class FunctionExecutor {
                 //              arg2 nil  body2 nil
                 
                 try {
-                    return execute_lambda(t, cur->right, e, local_defined_table); // execute lambda function
+                    return execute_lambda(cur, t, cur->right, e, local_defined_table); // execute lambda function
                 }
                 catch (Error err) {
                     if (e == no_return_value)
