@@ -3425,21 +3425,22 @@ class FunctionExecutor {
             throw Error(incorrect_number_of_arguments, "eval", "incorrect_number_of_arguments", 0, 0);
         }
 
-        try {
-            if (args->left->left != nullptr && args->left->left->token.value == "'")
-                return evalution(args->left->right->left, e, local_defined_table);
-            else
-                return evalution(args->left, e, local_defined_table); // Evaluate the current node
-        }
-        catch (Error err) {
-            if (e == no_return_value) {
-                e = unbound_parameter;
-                throw Error(unbound_parameter, "eval", "unbound parameter", 0, 0, err.root);
-            }
-            else
-                throw err;
-        }
+        Node_Token* tmp = evalution(args->left, e, local_defined_table);
+        return evalution(tmp, e, local_defined_table); // Evaluate the argument to get the expression to be evaluated
 
+        // // If the argument is a quoted expression, evaluate the quoted content
+        // if (expr->token.type == DOT && expr->left && expr->left->token.type == QUOTE) {
+        //     // (eval '(...)) => evaluate the quoted content
+        //     return evalution(expr->right->left, e, local_defined_table);
+        // }
+        // // If the argument is a string or atom, just return it as is
+        // if (is_ATOM(expr->token.type)) {
+        //     return expr;
+        // }
+        // // Otherwise, evaluate the argument as an expression
+        
+        // return evalution(expr, e, local_defined_table);
+        
     }
 
     Node_Token* evalution(Node_Token *cur, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
