@@ -5,6 +5,7 @@
 #include <unordered_map>
 #include <map>
 #include <set>
+#include <sstream>
 using namespace std;
 
 enum TokenType {
@@ -505,34 +506,7 @@ private:
     
     vector <pair<Token, bool>> dot_appear; // first: pointer to ( , second: (dot appear or not, following data appear or not)
 
-    string process_float(Token &token) {
-        string str = token.value;
-        string sign = "";
-
-        if (token.value.at(0) == '+' || token.value.at(0) == '-') {
-            sign = token.value.at(0); // save the sign
-            str = token.value.substr(1); // Remove the sign from the string
-        }
-
-
-        // 四捨五入到小數點後第三位
-        cerr << "str: " << str << endl;
-        double float_value = stod(str);
-        cerr << "float_value: " << float_value << endl;
-        str = to_string(round(float_value * 1000.0) / 1000.0);
-        cerr << "str: " << str << endl;
-
-        // 小數點後大於三位數, 只取到小數點後第三位
-        int dot_pos = str.find('.');
-        if (str.size() - dot_pos > 4)
-            str = str.substr(0, dot_pos + 4);
-
-        if (sign == "-")
-            str = sign + str;
-
-        cerr << "str: " << str << endl;
-        return str;
-    }
+    
     bool is_ATOM(TokenType type) {
         // <ATOM> ::= SYMBOL | INT | FLOAT | STRING | NIL | T | Left-PAREN Right-PAREN
         if (type == SYMBOL || type == INT || type == FLOAT || type == STRING || type == NIL || type == T) // || type == Left_PAREN || type == Right_PAREN
@@ -585,35 +559,6 @@ private:
             cout << " ";
     }
 
-    /*
-    void pretty__print(Node_Token *node, int &countquote) {
-        if (node == nullptr) {
-            return;
-        }
-
-        if ( is_ATOM(node->token.type)) {
-            // cerr << "\033[1;32m" << "is_ATOM: " << node->token.value << "\033[0m" << endl;
-            if (node->token.type == FLOAT) 
-                cout << process_float(node->token);// << endl;
-            else if (node->token.type == NIL) 
-                cout << "nil";// << endl;
-            else if (node->token.type == T) 
-                cout << "#t";// << endl;
-            else if (node->token.type == QUOTE) 
-                cout << "quote";// << endl;
-            else {
-                // if (func.find(node->token.value) != func.end())
-                if (node->token.is_function)
-                    cout << "#<procedure " + node->token.value + ">";// << endl;
-                else
-                    cout << node->token.value;// << endl;
-            }
-            return;
-        }
-        else
-            pretty_print(node, countquote);
-    }
-    */
     void pretty_print(Node_Token *node, int &countquote) {
         if (node == nullptr) {
             return;
@@ -779,6 +724,36 @@ public:
     SyntaxAnalyzer() {
         // currnt_level = 0;
     }
+    
+    string process_float(Token &token) {
+        string str = token.value;
+        string sign = "";
+
+        if (token.value.at(0) == '+' || token.value.at(0) == '-') {
+            sign = token.value.at(0); // save the sign
+            str = token.value.substr(1); // Remove the sign from the string
+        }
+
+
+        // 四捨五入到小數點後第三位
+        // cerr << "str: " << str << endl;
+        double float_value = stod(str);
+        // cerr << "float_value: " << float_value << endl;
+        str = to_string(round(float_value * 1000.0) / 1000.0);
+        // cerr << "str: " << str << endl;
+
+        // 小數點後大於三位數, 只取到小數點後第三位
+        int dot_pos = str.find('.');
+        if (str.size() - dot_pos > 4)
+            str = str.substr(0, dot_pos + 4);
+
+        if (sign == "-")
+            str = sign + str;
+
+        // cerr << "str: " << str << endl;
+        return str;
+    }
+    
     void set_root() {
         root = tree.get_root();
     }
@@ -3276,11 +3251,11 @@ class FunctionExecutor {
             if (finish_input) {
                 // cerr << "\033[1;32mfinish_input\033[0m" << endl;
                 // bulid parser tree
-                cerr << "\033[1;34menter build_tree\033[0m" << endl;
+                // cerr << "\033[1;34menter build_tree\033[0m" << endl;
                 Syntax.build_tree(Lexical.tokenBuffer, false);
                 Syntax.set_root();
-                cerr << "\033[1;34mend build_tree\033[0m" << endl;
-                Syntax.print(); // !Debug
+                // cerr << "\033[1;34mend build_tree\033[0m" << endl;
+                // Syntax.print(); // !Debug
 
                 return Syntax.get_root(); // return the root of the parser tree
             }
@@ -3382,8 +3357,8 @@ class FunctionExecutor {
     Node_Token* newline_func(Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
         Node_Token* node = new Node_Token();
         pointer_gather.insert(node);
-        node->token.value = "#t";
-        node->token.type = T;
+        node->token.value = "#f";
+        node->token.type = NIL;
 
         if (count_args(args) != 0) {
             e = incorrect_number_of_arguments;
@@ -3396,6 +3371,53 @@ class FunctionExecutor {
         return node;
     }
 
+    Node_Token* To_String(string instr, Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
+        if (count_args(args) != 1) {
+            e = incorrect_number_of_arguments;
+            throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
+        }
+
+        Node_Token* node = new Node_Token();
+        pointer_gather.insert(node);
+        node->token.type = STRING;
+
+        Node_Token* parameter;
+        try {
+            parameter = evalution(args->left, e, local_defined_table);
+        } catch (Error err) {
+            if (e == no_return_value) {
+                e = unbound_parameter;
+                throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, err.root);
+            }
+            throw err;
+        }
+
+        if (instr == "symbol->string") {
+            // Only accept symbol
+            if (parameter->token.type != SYMBOL) {
+                e = incorrect_argument_type;
+                throw Error(incorrect_argument_type, instr, parameter->token.value, 0, 0, parameter);
+            }
+
+            node->token.value = "\"" + parameter->token.value + "\""; // Surround with quotes
+            
+            
+        }
+        else if (instr == "number->string") {
+            if (parameter->token.type != INT && parameter->token.type != FLOAT) {
+                e = incorrect_argument_type;
+                throw Error(incorrect_argument_type, instr, parameter->token.value, 0, 0, parameter);
+            }
+            string s;
+            if (parameter->token.type == FLOAT)
+                s = syn.process_float(parameter->token);
+            else if (parameter->token.type == INT)
+                s = parameter->token.value;
+            node->token.value = "\"" + s + "\""; // Surround with quotes
+        }
+
+        return node;
+    }
 
     Node_Token* evalution(Node_Token *cur, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
         // cerr << "-------- enter evalution --------" <<endl;
@@ -3507,9 +3529,8 @@ class FunctionExecutor {
                 return write(func_name, cur, cur->right, e, local_defined_table);
             else if (func_name == "newline")
                 return newline_func(cur, cur->right, e, local_defined_table);
-            
-            // else if (func_name == "symbol->string" || func_name == "number->string")
-            //     return To_String(func_name, cur, cur->right, e, local_defined_table);
+            else if (func_name == "symbol->string" || func_name == "number->string")
+                return To_String(func_name, cur, cur->right, e, local_defined_table);
             // else if (func_name == "eval")
             //     return
             // else if (func_name == "set!")
