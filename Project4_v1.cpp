@@ -3419,6 +3419,29 @@ class FunctionExecutor {
         return node;
     }
 
+    Node_Token* eval(Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
+        if (count_args(args) != 1) {
+            e = incorrect_number_of_arguments;
+            throw Error(incorrect_number_of_arguments, "eval", "incorrect_number_of_arguments", 0, 0);
+        }
+
+        try {
+            if (args->left->left != nullptr && args->left->left->token.value == "'")
+                return evalution(args->left->right->left, e, local_defined_table);
+            else
+                return evalution(args->left, e, local_defined_table); // Evaluate the current node
+        }
+        catch (Error err) {
+            if (e == no_return_value) {
+                e = unbound_parameter;
+                throw Error(unbound_parameter, "eval", "unbound parameter", 0, 0, err.root);
+            }
+            else
+                throw err;
+        }
+
+    }
+
     Node_Token* evalution(Node_Token *cur, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
         // cerr << "-------- enter evalution --------" <<endl;
         if (cur == nullptr) return nullptr;
@@ -3531,8 +3554,8 @@ class FunctionExecutor {
                 return newline_func(cur, cur->right, e, local_defined_table);
             else if (func_name == "symbol->string" || func_name == "number->string")
                 return To_String(func_name, cur, cur->right, e, local_defined_table);
-            // else if (func_name == "eval")
-            //     return
+            else if (func_name == "eval")
+                return eval(cur, cur->right, e, local_defined_table);
             // else if (func_name == "set!")
             //     return
 
