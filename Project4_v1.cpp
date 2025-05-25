@@ -106,7 +106,8 @@ set<string> bulid_in_func = { // only bulid-in function
 
     "create-error-object", "error-object?", 
     "read", "write", "display-string", 
-    "newline", "eval", "set!"
+    "newline", "symbol->string", "number->string",
+    "eval", "set!"
 };
 // set <string> func; // all function name, unclude self-defined function
 unordered_map<string, Node_Token*> defined_table; // store the variable name, value and defined func
@@ -2385,7 +2386,7 @@ class FunctionExecutor {
                         throw err;
                 }
                 if (instr == "atom?") {
-                    if (is_ATOM(parameter->token.type)) {
+                    if (is_ATOM(parameter->token.type) || parameter->token.type == USERERROR) {
                         node->token.value = "#t";
                         node->token.type = T;
                     }
@@ -2428,7 +2429,7 @@ class FunctionExecutor {
                     }
                 }
                 else if (instr == "string?") {
-                    if (parameter->token.type == STRING) {
+                    if (parameter->token.type == STRING || parameter->token.type == USERERROR) {
                         node->token.value = "#t";
                         node->token.type = T;
                     }
@@ -3290,35 +3291,35 @@ class FunctionExecutor {
                     cerr << "\033[1;31m" << "In read UNEXPECTED_TOKEN" << "\033[0m" << endl;
                     // cout << e.message << endl;
                     node->token.type = USERERROR;
-                    node->token.value = e.message;
+                    node->token.value = "\"" + e.message + "\"";
                     
                     break;
                 case UNEXPECTED_CLOSE_PAREN:
                     cerr << "\033[1;31m" << "In read UNEXPECTED_CLOSE_PAREN" << "\033[0m" << endl;
                     // cout << e.message << endl;
                     node->token.type = USERERROR;
-                    node->token.value = e.message;
+                    node->token.value = "\"" + e.message + "\"";
                     
                     break;
                 case UNEXPECTED_END_PAREN:
                     cerr << "\033[1;31m" << "In read UNEXPECTED_END_PAREN" << "\033[0m" << endl;
                     // cout << e.message << endl;
                     node->token.type = USERERROR;
-                    node->token.value = e.message;
+                    node->token.value = "\"" + e.message + "\"";
                     
                     break;
                 case UNEXPECTED_STRING:
                     cerr << "\033[1;31m" << "In read UNEXPECTED_STRING" << "\033[0m" << endl;
                     // cout << e.message << endl;
                     node->token.type = USERERROR;
-                    node->token.value = e.message;
+                    node->token.value = "\"" + e.message + "\"";
                     
                     break;
                 case UNEXPECTED_EOF:
                     cerr << "\033[1;31m" << "In read UNEXPECTED_EOF" << "\033[0m" << endl;
                     // cout << e.message << endl;
                     node->token.type = USERERROR;
-                    node->token.value = e.message;
+                    node->token.value = "\"" + e.message + "\"";
                     
                     break;
                 // case UNEXPECTED_EXIT:
@@ -3335,25 +3336,41 @@ class FunctionExecutor {
         return node;
     }
 
-    Node_Token* write(Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
+    Node_Token* write(string instr, Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
         if (count_args(args) != 1) {
             e = incorrect_number_of_arguments;
-            throw Error(incorrect_number_of_arguments, "write", "incorrect_number_of_arguments", 0, 0);
+            throw Error(incorrect_number_of_arguments, instr, "incorrect_number_of_arguments", 0, 0);
         }
         Node_Token* node;
 
-        Node_Token *parameter = args->left;
-        try {
-            node = evalution(parameter, e, local_defined_table);
-            syn.print(node); // Print the evaluated value
+       
 
-            // node->token.value = left->token.value;
-            // node->token.type = left->token.type;
+        try {
+            node = evalution(args->left, e, local_defined_table);
+            // if instruction is "write", the argement can be any type
+            if (instr == "write")
+                syn.print(node); // Print the evaluated value
+            
+            // if instruction is "display-string", the argement must be a string or error object
+            else if (instr == "display-string") {
+                if (node->token.type != STRING && node->token.type != USERERROR) {
+                    e = incorrect_argument_type;
+                    throw Error(incorrect_argument_type, "display-string", "incorrect_argument_type", 0, 0, args->left);
+                }
+                else {
+                    string value = node->token.value;
+                    // Remove the surrounding quotes
+                    value = value.substr(1, value.size() - 2); // Remove the surrounding quotes
+                    cout << value; // Print the string without quotes
+                }
+                
+            }
+
         }
         catch (Error err) {
             if (e == no_return_value) {
                 e = unbound_parameter;
-                throw Error(unbound_parameter, "write", "unbound parameter", 0, 0, err.root);
+                throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, err.root);
             }
             else
                 throw err;
@@ -3362,7 +3379,24 @@ class FunctionExecutor {
         return node; // Return the evaluated value
     }
 
-    
+    Node_Token* newline_func(Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
+        Node_Token* node = new Node_Token();
+        pointer_gather.insert(node);
+        node->token.value = "#t";
+        node->token.type = T;
+
+        if (count_args(args) != 0) {
+            e = incorrect_number_of_arguments;
+            throw Error(incorrect_number_of_arguments, "newline", "incorrect_number_of_arguments", 0, 0);
+        }
+        else {
+            cout << endl; // Print a newline
+        }
+
+        return node;
+    }
+
+
     Node_Token* evalution(Node_Token *cur, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
         // cerr << "-------- enter evalution --------" <<endl;
         if (cur == nullptr) return nullptr;
@@ -3430,7 +3464,7 @@ class FunctionExecutor {
                 
                 // not an executable function
                 if (!tmp->token.is_function) {
-                    func_Token->token.value = func_name; // copy the function token
+                    // func_Token->token.value = func_name; // copy the function token
                     e = undefined_function;
                     throw Error(undefined_function, func_name, func_name ,func_Token->token.line, func_Token->token.column, tmp);
                 }
@@ -3451,7 +3485,7 @@ class FunctionExecutor {
                 
                 // not an executable function
                 if (!tmp->token.is_function) {
-                    func_Token->token.value = func_name; // copy the function token
+                    // func_Token->token.value = func_name; // copy the function token
                     // tmp->left = func_Token->left;
                     // tmp->right = func_Token->right;
                     e = undefined_function;
@@ -3469,12 +3503,13 @@ class FunctionExecutor {
                 return err_obj("error-object?", cur, cur->right, e, local_defined_table);
             else if (func_name == "read")
                 return read(cur, cur->right, e, local_defined_table);
-            else if (func_name == "write")
-                return write(cur, cur->right, e, local_defined_table);
-            // else if (func_name == "display-string")
-            //     return
-            // else if (func_name == "newline")
-            //     return
+            else if (func_name == "write" || func_name == "display-string")
+                return write(func_name, cur, cur->right, e, local_defined_table);
+            else if (func_name == "newline")
+                return newline_func(cur, cur->right, e, local_defined_table);
+            
+            // else if (func_name == "symbol->string" || func_name == "number->string")
+            //     return To_String(func_name, cur, cur->right, e, local_defined_table);
             // else if (func_name == "eval")
             //     return
             // else if (func_name == "set!")
@@ -3837,6 +3872,7 @@ int main() {
                     // cerr << "\033[1;31m" << "unbound_condition" << "\033[0m" << endl;
                     cout << e.message;
                     Syntax.print(e.get_sub_error_tree());
+                    cout << "\n";
                     Lexical.reset();
                     break;
                 case division_by_zero:
@@ -3850,6 +3886,7 @@ int main() {
                     
                     // Syntax.print(e.get_sub_error_tree());
                     Syntax.print(e.get_sub_error_tree());
+                    cout << "\n";
                     Lexical.reset();
                     break;
                 case defined:
@@ -3896,7 +3933,7 @@ int main() {
         
     }
         
-    cout << "Thanks for using OurScheme!";
+    cout << "Thanks for using OurScheme!\n";
     fflush(stdout);
     clear_pointer_gather();
     return 0;
