@@ -1273,7 +1273,9 @@ public:
         while (!end) {
             c_peek = cin.peek(); // peek the next char
             if (c_peek == EOF) {
-                if (!str.empty()) {
+                if (leftParen > rightParen)
+                    throw UNEXPECTED_EOF;
+                else if (!str.empty()) {
                     c_peek = getchar(); // read the next char
                     ungetc(c_peek, stdin);
                     finish_input = true;
@@ -1350,6 +1352,10 @@ public:
 
                 if (error == UNEXPECTED_EOF) {
                     set_token_line_and_column(tmptoken, 0, 0, "eof");
+                    
+                    c_peek = getchar(); // read the next char
+                    ungetc(c_peek, stdin);
+                    finish_input = true;
                     return "is_comment_eof";
                 }
             
@@ -1419,7 +1425,7 @@ public:
         vector<pair<int, bool>> dot_appear;
         SyntaxAnalyzer syntax;
         char c_peek = '\0';
-
+        bool has_paren = false; // whether the token has parentheses
         do {
             try {
                 c_peek = cin.peek(); // peek the next char
@@ -1438,6 +1444,9 @@ public:
                 // cerr << "\033[1;32m" << "tmpstr: " << tmpstr << "\033[0m" << endl;
 
                 // no error, judge the syntax
+                // if (leftParen > rightParen) {
+
+                // }
                 if (error == Error_None)
                     syntax.check_syntax(tokenBuffer, error);
                 
@@ -1448,6 +1457,7 @@ public:
                 }
 
                 // turn () to nil
+                bool ok = true;
                 if (tokenBuffer.size() >= 2) {
                     if (tokenBuffer.at(tokenBuffer.size()-2).type == Left_PAREN && tokenBuffer.at(tokenBuffer.size()-1).type == Right_PAREN) {
                         Token nil_token;
