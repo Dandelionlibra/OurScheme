@@ -1203,13 +1203,19 @@ private:
 
     void handle_error(errorType e, char c_peek) {
         Error error;
-        string current = tokenBuffer.back().value;
-        int error_line = tokenBuffer.back().line;
-        int error_column = tokenBuffer.back().column;
+        string current;
+        int error_line;
+        int error_column;
         start_column = 1;
         start_line = 1;
 
         if (e != UNEXPECTED_EOF) { //  && !is_enter(c_peek)
+            current = tokenBuffer.back().value;
+            error_line = tokenBuffer.back().line;
+            error_column = tokenBuffer.back().column;
+
+
+            // cerr << "throw error: " << e << endl;
             string trash;
             getline(cin, trash);
             for (char c : trash) {
@@ -1237,7 +1243,7 @@ private:
             case UNEXPECTED_EOF:
                 is_EOF = true;
                 // cerr << "2. throw error UNEXPECTED_EOF" << endl;
-                error = Error(e, "eof", "eof", 0, 0);
+                error = Error(UNEXPECTED_EOF, "eof", "eof", 0, 0);
                 break;
             case UNEXPECTED_EXIT:
                 error = Error(e, "exit", "exit", 0, 0);
@@ -1268,9 +1274,17 @@ public:
             c_peek = cin.peek(); // peek the next char
             if (c_peek == EOF) {
                 // cerr << "1. throw error UNEXPECTED_EOF" << endl;
-                error = UNEXPECTED_EOF;
-                set_token_line_and_column(tmptoken, 0, 0, "eof");
+                // if (!str.empty()) {
+                //     // cerr << "1. throw error UNEXPECTED_EOF" << endl;
+                //     c_peek = '\n';
+                // }
+                // else {
+                c_peek = getchar(); // read the next char
+                ungetc(c_peek, stdin);
+                finish_input = true;
                 return "eof";
+                
+                // }
             }
             // if ()
 
@@ -1305,11 +1319,14 @@ public:
             }
             // handle enter
             else if (is_enter(c_peek)) {
-                getchar(); // skip the char of '\n'
+                if (cin.peek() != EOF) {
+                    getchar(); // skip the char of '\n'
+                    reset_Line_And_Column(line+1, 1);
+                }
                 // reset_Line_And_Column(line, column+1);
                 // set_token_line_and_column(tmptoken, line, column-str.size(), "\n");
 
-                reset_Line_And_Column(line+1, 1);
+                
                 
                 end = true;
                 continue;
@@ -1341,9 +1358,26 @@ public:
             // handle double quote
             // ! meet eof not finish
             else if (c_peek == '\"') {
+                // char tmp = cin.peek();
+                // cerr << "1354 tmp: " << tmp << endl;
+                // if (tmp == EOF) {
+                //     cerr << "\033[1;31mUNEXPECTED_EOF\033[0m" << endl;
+                //     tmp = getchar();
+                //     ungetc(tmp, stdin); // push EOF back to the buffer
+                //     end = true;
+                //     continue;
+                // }
+
                 read_whole_string(str, error, '\"');
                 if (error == UNEXPECTED_EOF) {
-                    cerr << "\033[1;31mUNEXPECTED_EOF  str: " << str << "\033[0m" << endl;
+                    // cerr << "\033[1;31mUNEXPECTED_EOF  str: " << str << "\033[0m" << endl;
+                    error = UNEXPECTED_STRING;
+                    set_token_line_and_column(tmptoken, line, column, str);
+                    return str;
+                    // c_peek = getchar(); // read the next char
+                    // ungetc(c_peek, stdin); // push EOF back to the buffer
+                    
+
                     continue;
                 }
                 else if (error == UNEXPECTED_STRING) {
@@ -1356,6 +1390,8 @@ public:
                 // column++;
                 set_token_line_and_column(tmptoken, line, column-str.size()-count_escape, str);
                 end = true;
+                c_peek = cin.peek();
+
                 continue;
 
             }
@@ -1395,8 +1431,16 @@ public:
         SyntaxAnalyzer syntax;
 
         char c_peek = '\0';
+
+
         do {
             try {
+                c_peek = cin.peek(); // peek the next char
+                if (c_peek == EOF) {
+                    c_peek = getchar(); // read the next char
+                    cerr << "1. throw error UNEXPECTED_EOF" << endl;
+                    throw UNEXPECTED_EOF; // throw error UNEXPECTED_EOF
+                }
                 // int tmp_line = line;
                 // int tmp_column = column;
                 tmpstr = Get_Str(c_peek, tmptoken, error, finish_input); // get the string from cin
@@ -1474,6 +1518,7 @@ public:
                 c_peek = cin.peek();
 
                 if (c_peek == EOF) {
+
                     // is_EOF = true;
                     // cerr << "after finish_input, throw error UNEXPECTED_EOF" << endl;
                     // c_peek = getchar(); // skip the EOF
@@ -1483,6 +1528,7 @@ public:
                 else if (is_enter(c_peek)) {
                     // cerr << "after finish_input, is_enter" << endl;
                     getchar(); // skip the char of '\n'}
+                    start_column = 1;
                     return;
                 }
                 else if (is_space(c_peek)) {
@@ -1715,7 +1761,7 @@ class FunctionExecutor {
     }
     public:
     Node_Token* define_func(string instr, Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
-        cerr << "\033[1;33m" << "define_func" << "\033[0m" << endl;
+        // cerr << "\033[1;33m" << "define_func" << "\033[0m" << endl;
         vector<Node_Token*> arg_list;
         int c = count_args(args);
         if (cur->parent != nullptr){
@@ -1789,7 +1835,7 @@ class FunctionExecutor {
     }
 
     Node_Token* define_func_more(string instr, Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
-        cerr << "\033[1;33m" << "define_func_more" << "\033[0m" << endl;
+        // cerr << "\033[1;33m" << "define_func_more" << "\033[0m" << endl;
         vector<Node_Token*> arg_list;
         int c = count_args(args);
         //                  * <- cur
@@ -1843,7 +1889,7 @@ class FunctionExecutor {
     }
 
     Node_Token* self_defined_function(string instr, Node_Token *cur, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
-        cerr << "\033[1;33m" << "--------- enter self_defined_function ---------" << "\033[0m" << endl;
+        // cerr << "\033[1;33m" << "--------- enter self_defined_function ---------" << "\033[0m" << endl;
         Node_Token* node;
         vector<Node_Token*> arg_list;
         unordered_map<string, Node_Token*> new_table; // = local_defined_table
@@ -2900,14 +2946,7 @@ class FunctionExecutor {
                 return sequence(args, e, local_defined_table);
             }
             catch (Error err) {
-                cerr << "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!" << endl;
-                // if (e == no_return_value) {
-                //     e = unbound_parameter;
-                //     throw Error(unbound_parameter, instr, "unbound parameter", 0, 0, err.root);
-                // }
-                // else
-                    throw err;
-                
+                throw err;
             }
         }
 
@@ -2944,7 +2983,7 @@ class FunctionExecutor {
             // while (exp != nullptr && exp->token.type != NIL) {
             Node_Token *ans;
             if (c == 2) { 
-                cerr << "\033[1;31m" << "c == 2" << "\033[0m" << endl;
+                // cerr << "\033[1;31m" << "c == 2" << "\033[0m" << endl;
                 // try {
                 //     ans = evalution(exp->left, e, local_defined_table);
                 // }
@@ -2960,7 +2999,7 @@ class FunctionExecutor {
                 return evalution(exp->left, e, local_defined_table);
             }
             else if (c == 3) {
-                cerr << "\033[1;31m" << "c == 3" << "\033[0m" << endl;
+                // cerr << "\033[1;31m" << "c == 3" << "\033[0m" << endl;
                 try {
                     if (judge_elements->token.type != NIL) {
                         ans = evalution(exp->left, e, local_defined_table);
@@ -3037,7 +3076,7 @@ class FunctionExecutor {
                 }
                     
                 if (tmp->token.type == SYMBOL && tmp->token.value == "else") {
-                    cerr << "\033[1;36m" << "--------------------- enter else -------------------: " << "\033[0m" << endl;
+                    // cerr << "\033[1;36m" << "--------------------- enter else -------------------: " << "\033[0m" << endl;
                     return sequence(parameter->right, e, local_defined_table); // 直接 return right 的執行結果
                 }
                 else {// 非 else
@@ -3077,7 +3116,7 @@ class FunctionExecutor {
                         throw err;
                 }
                 if (success->token.type != NIL) {
-                    cerr << "\033[1;31m" << "success: " << success->token.value << "\033[0m" << endl;
+                    // cerr << "\033[1;31m" << "success: " << success->token.value << "\033[0m" << endl;
                     return sequence(parameter->right, e, local_defined_table); // 直接 return right 的執行結果
                 }
             }
@@ -3290,13 +3329,13 @@ class FunctionExecutor {
                     node->token.value = "\"" + e.message + "\"";
                     
                     break;
-                case UNEXPECTED_EOF:
-                    cerr << "\033[1;31m" << "In read UNEXPECTED_EOF" << "\033[0m" << endl;
-                    // cout << e.message << endl;
-                    node->token.type = USERERROR;
-                    node->token.value = "\"" + e.message + "\"";
+                // case UNEXPECTED_EOF:
+                //     cerr << "\033[1;31m" << "In read UNEXPECTED_EOF" << "\033[0m" << endl;
+                //     // cout << e.message << endl;
+                //     node->token.type = USERERROR;
+                //     node->token.value = "\"" + e.message + "\"";
                     
-                    break;
+                //     break;
                 // case UNEXPECTED_EXIT:
                 //     cerr << "\033[1;31m" << "In read UNEXPECTED_EXIT" << "\033[0m" << endl;
                 //     cout << endl;
@@ -3690,7 +3729,7 @@ class FunctionExecutor {
                 return verbose_func(func_name, cur, cur->right, e, local_defined_table);
                 
             else if (defined_table.find(func_name) != defined_table.end()) {
-                cerr << "-------- self defined function --------\n";
+                // cerr << "-------- self defined function --------\n";
             //     cerr << "func_name: " << func_name << endl;
                 try {
                     return self_defined_function(func_name, cur, e, local_defined_table); // execute self defined function
@@ -3702,7 +3741,7 @@ class FunctionExecutor {
                 }
             }
             else if (local_defined_table.find(func_name) != local_defined_table.end()) {
-                cerr << "-------- self local_defined_table function --------\n";
+                // cerr << "-------- self local_defined_table function --------\n";
             //     cerr << "func_name: " << func_name << endl;
                 try {
                     return self_defined_function(func_name, cur, e, local_defined_table); // execute self defined function
