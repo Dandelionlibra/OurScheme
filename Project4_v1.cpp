@@ -3426,7 +3426,21 @@ class FunctionExecutor {
         }
 
         Node_Token* tmp = evalution(args->left, e, local_defined_table);
-        return evalution(tmp, e, local_defined_table); // Evaluate the argument to get the expression to be evaluated
+        try {
+            return evalution(tmp, e, local_defined_table);
+        } // Evaluate the argument to get the expression to be evaluated
+        catch (Error err) {
+            if (e == defined) {
+                if (verbose_mode)
+                    cout << err.message << endl;
+                e = Error_None;
+                return nullptr; // If the value is already defined, return nullptr
+            }
+            else
+                throw err; // If an error occurs during evaluation, rethrow it
+        }
+    
+    
     }
 
     Node_Token* set_func(string instr, Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
@@ -3793,8 +3807,6 @@ class FunctionExecutor {
 
 
 };
-
-
 
 int main() {
     // func = bulid_in_func;
