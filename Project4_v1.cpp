@@ -1059,7 +1059,7 @@ private:
                 // c_peek = cin.peek();
                 if (c_peek == EOF) {
                     error = UNEXPECTED_EOF;
-                    // return;
+                    return;
                 }
                 else{
                     tmpstr.push_back(getchar());
@@ -1273,25 +1273,24 @@ public:
         while (!end) {
             c_peek = cin.peek(); // peek the next char
             if (c_peek == EOF) {
-                // cerr << "1. throw error UNEXPECTED_EOF" << endl;
-                // if (!str.empty()) {
-                //     // cerr << "1. throw error UNEXPECTED_EOF" << endl;
-                //     c_peek = '\n';
-                // }
-                // else {
-                c_peek = getchar(); // read the next char
-                ungetc(c_peek, stdin);
-                finish_input = true;
-                return "eof";
-                
-                // }
+                if (!str.empty()) {
+                    c_peek = getchar(); // read the next char
+                    ungetc(c_peek, stdin);
+                    finish_input = true;
+                    cerr << "\033[1;31mUNEXPECTED_EOF  str: " << str << "\033[0m" << endl;
+                    cerr << error << endl;
+                    set_token_line_and_column(tmptoken, line, column-str.size(), str);
+                    return str;
+                }
+                else if (!tokenBuffer.empty()) {
+                    c_peek = getchar(); // read the next char
+                    ungetc(c_peek, stdin);
+                    finish_input = true;
+                    return "eof";
+                }
+                else
+                    throw UNEXPECTED_EOF; // throw error UNEXPECTED_EOF
             }
-            // if ()
-
-            // ungetc(c, stdin); // push EOF back to the buffer
-
-
-
 
             // 如果目前str內有symbol，下個讀入的如果是特殊字元，則先回傳當前str作為token
             if (!str.empty() && is_special_symbol(c_peek)) {
@@ -1358,16 +1357,6 @@ public:
             // handle double quote
             // ! meet eof not finish
             else if (c_peek == '\"') {
-                // char tmp = cin.peek();
-                // cerr << "1354 tmp: " << tmp << endl;
-                // if (tmp == EOF) {
-                //     cerr << "\033[1;31mUNEXPECTED_EOF\033[0m" << endl;
-                //     tmp = getchar();
-                //     ungetc(tmp, stdin); // push EOF back to the buffer
-                //     end = true;
-                //     continue;
-                // }
-
                 read_whole_string(str, error, '\"');
                 if (error == UNEXPECTED_EOF) {
                     // cerr << "\033[1;31mUNEXPECTED_EOF  str: " << str << "\033[0m" << endl;
@@ -1429,9 +1418,7 @@ public:
         string tmpstr = "";
         vector<pair<int, bool>> dot_appear;
         SyntaxAnalyzer syntax;
-
         char c_peek = '\0';
-
 
         do {
             try {
@@ -1511,7 +1498,7 @@ public:
         while(!finish_input);
   
         if (finish_input) {
-            // cerr << "\033[1;32mfinish_input\033[0m" << endl;
+            cerr << "\033[1;32mfinish_input\033[0m" << endl;
             // print_vector(tokenBuffer);
 
             while (true) {
@@ -3773,13 +3760,13 @@ class FunctionExecutor {
                     throw Error(no_return_value, func_name, err.expected, 0, 0, err.root);
                 throw err;
             }
-            cerr << "\033[1;33m" << "--------- judge enter execute_lambda ---------" << "\033[0m" << endl;
+            // cerr << "\033[1;33m" << "--------- judge enter execute_lambda ---------" << "\033[0m" << endl;
             // if (t != nullptr) {
             //     cerr << "\033[1;33m" << "t->token.value: " << t->token.value << "\033[0m" << endl;
             //     cerr << "\033[1;33m" << "t->left->token.type: " << t->left->token.type << "\033[0m" << endl;
             // }
             if (t != nullptr && t->token.value == "lambda") {
-                cerr << "\033[1;33m" << "--------- enter execute_lambda ---------" << "\033[0m" << endl;
+                // cerr << "\033[1;33m" << "--------- enter execute_lambda ---------" << "\033[0m" << endl;
                 // 若為 lambda function, 則
                 //                  lambda <- t.token
                 //                  /    \
@@ -3900,32 +3887,32 @@ int main() {
         } catch (Error e) {
             switch (e.type) {
                 case UNEXPECTED_TOKEN:
-                    // cerr << "\033[1;31m" << "UNEXPECTED_TOKEN" << "\033[0m" << endl;
+                    cerr << "\033[1;31m" << "UNEXPECTED_TOKEN" << "\033[0m" << endl;
                     cout << e.message << endl ;
                     Lexical.reset();
                     break;
                 case UNEXPECTED_CLOSE_PAREN:
-                    // cerr << "\033[1;31m" << "UNEXPECTED_CLOSE_PAREN" << "\033[0m" << endl;
+                    cerr << "\033[1;31m" << "UNEXPECTED_CLOSE_PAREN" << "\033[0m" << endl;
                     cout << e.message << endl;
                     Lexical.reset();
                     break;
                 case UNEXPECTED_END_PAREN:
-                    // cerr << "\033[1;31m" << "UNEXPECTED_END_PAREN" << "\033[0m" << endl;
+                    cerr << "\033[1;31m" << "UNEXPECTED_END_PAREN" << "\033[0m" << endl;
                     cout << e.message << endl;
                     Lexical.reset();
                     break;
                 case UNEXPECTED_STRING:
-                    // cerr << "\033[1;31m" << "UNEXPECTED_STRING" << "\033[0m" << endl;
+                    cerr << "\033[1;31m" << "UNEXPECTED_STRING" << "\033[0m" << endl;
                     cout << e.message << endl;
                     Lexical.reset();
                     break;
                 case UNEXPECTED_EOF:
-                    // cerr << "\033[1;31m" << "UNEXPECTED_EOF" << "\033[0m" << endl;
+                    cerr << "\033[1;31m" << "UNEXPECTED_EOF" << "\033[0m" << endl;
                     cout << e.message << endl;
                     Lexical.reset();
                     break;
                 case UNEXPECTED_EXIT:
-                    // cerr << "\033[1;31m" << "UNEXPECTED_EXIT" << "\033[0m" << endl;
+                    cerr << "\033[1;31m" << "UNEXPECTED_EXIT" << "\033[0m" << endl;
                     cout << endl;
                     Lexical.reset();
                     is_exit = true;
@@ -3951,7 +3938,8 @@ int main() {
                     Lexical.reset();
                     break;
                 case unbound_symbol:
-                    // cerr << "\033[1;31m" << "unbound_symbol" << "\033[0m" << endl;
+                    cerr << "\033[1;31m" << "unbound_symbol" << "\033[0m" << endl;
+                    cerr << e.expected << endl;
                     cout << e.message << endl;
                     Lexical.reset();
                     break;
