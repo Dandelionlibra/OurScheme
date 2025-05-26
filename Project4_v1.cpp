@@ -327,11 +327,11 @@ class AST_Tree {
                 // *       /   \
                 // *    token  nil
                 // *    /   \    
-                cerr << "\033[1;32m" << "** start bulid QUOTE side PAREN tree **" << "\033[0m" << endl;
+                // cerr << "\033[1;32m" << "** start bulid QUOTE side PAREN tree **" << "\033[0m" << endl;
                 right_quote->left=insert(right_quote, tokenbuffer, index);
                 right_quote->right=set_node(nil_token, nullptr, nullptr, right_quote);
 
-                cerr << "\033[1;32m" << "** end bulid QUOTE side PAREN tree **" << "\033[0m" << endl;
+                // cerr << "\033[1;32m" << "** end bulid QUOTE side PAREN tree **" << "\033[0m" << endl;
             
             
             if (!create_node) 
@@ -3427,21 +3427,52 @@ class FunctionExecutor {
 
         Node_Token* tmp = evalution(args->left, e, local_defined_table);
         return evalution(tmp, e, local_defined_table); // Evaluate the argument to get the expression to be evaluated
+    }
 
-        // // If the argument is a quoted expression, evaluate the quoted content
-        // if (expr->token.type == DOT && expr->left && expr->left->token.type == QUOTE) {
-        //     // (eval '(...)) => evaluate the quoted content
-        //     return evalution(expr->right->left, e, local_defined_table);
-        // }
-        // // If the argument is a string or atom, just return it as is
-        // if (is_ATOM(expr->token.type)) {
-        //     return expr;
-        // }
-        // // Otherwise, evaluate the argument as an expression
-        
-        // return evalution(expr, e, local_defined_table);
+    Node_Token* set_func(string instr, Node_Token *cur, Node_Token *args, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
+        unordered_map<string, Node_Token*> new_table = local_defined_table;
+        // unordered_map<string, Node_Token*> save_defined_table = defined_table;
+        Node_Token* node = new Node_Token();
+
+        if (count_args(args) != 2) {
+            e = error_define_format;
+            throw Error(error_define_format, "SET!", "error_define_format", 0, 0, cur);
+        }
+        else if (args->left->token.type != SYMBOL) {
+            e = error_define_format;
+            throw Error(error_define_format, "SET!", "error_define_format", 0, 0, cur);
+        }
+
+        Node_Token *value = args->right->left;
+        string name = args->left->token.value;
+        // cerr << "\033[1;35m" << "name: " << name << "\033[0m" << endl;
+        try {
+            Node_Token *tmp = evalution(value, e, new_table);
+            // Check if the symbol is already defined in the local scope
+            if (local_defined_table.find(name) != local_defined_table.end()) {
+                local_defined_table[name] = tmp; // Update the value in the local scope
+                node = local_defined_table[name]; // Return the updated value
+            }
+            // If not defined in local scope, create a new entry in the global scope
+            else {
+                defined_table[name] = tmp;
+                node = defined_table[name]; // Return the newly defined value
+            }
+            return tmp;
+        }
+        catch (Error err) {
+            if (e == no_return_value) {
+                e = no_return_value_inernal;
+                throw Error(no_return_value_inernal, instr, "no_return_value_inernal", 0, 0, err.root);
+            }
+            else
+                throw err;
+        }
+
         
     }
+
+
 
     Node_Token* evalution(Node_Token *cur, errorType &e, unordered_map<string, Node_Token*> &local_defined_table) {
         // cerr << "-------- enter evalution --------" <<endl;
@@ -3510,7 +3541,6 @@ class FunctionExecutor {
                 
                 // not an executable function
                 if (!tmp->token.is_function) {
-                    // func_Token->token.value = func_name; // copy the function token
                     e = undefined_function;
                     throw Error(undefined_function, func_name, func_name ,func_Token->token.line, func_Token->token.column, tmp);
                 }
@@ -3525,22 +3555,13 @@ class FunctionExecutor {
                 if (defined_table.find(func_name) != defined_table.end()) {
                     tmp = defined_table[func_name]; // get the function token
                     func_name = defined_table[func_name]->token.value;
-                    // cerr << "\033[1;35m" << "is function: " << func_name << "\033[0m" << endl;
-                    // cerr << "\033[1;35m" << "exec: " << func_Token->token.is_function << "\033[0m" << endl;
                 }
                 
                 // not an executable function
                 if (!tmp->token.is_function) {
-                    // func_Token->token.value = func_name; // copy the function token
-                    // tmp->left = func_Token->left;
-                    // tmp->right = func_Token->right;
                     e = undefined_function;
                     throw Error(undefined_function, func_name, func_name ,func_Token->token.line, func_Token->token.column, tmp);
                 }
-                // else {
-                //     cerr << "\033[1;33m" << "********* set the function token to be executable *********"  << endl;
-                //     // func_Token->token.is_function = true; // set the function token to be executable
-                // }
             }
             
             if (func_name == "create-error-object")
@@ -3557,10 +3578,8 @@ class FunctionExecutor {
                 return To_String(func_name, cur, cur->right, e, local_defined_table);
             else if (func_name == "eval")
                 return eval(cur, cur->right, e, local_defined_table);
-            // else if (func_name == "set!")
-            //     return
-
-
+            else if (func_name == "set!")
+                return set_func("set!", cur, cur->right, e, local_defined_table);
             
             else if (func_name == "define")
                 return define_func("define", cur, cur->right, e, local_defined_table);
@@ -3978,7 +3997,7 @@ int main() {
         
     }
         
-    cout << "Thanks for using OurScheme!\n";
+    cout << "Thanks for using OurScheme!";
     fflush(stdout);
     clear_pointer_gather();
     return 0;
