@@ -163,7 +163,7 @@ public:
         else if (t == no_return_value || t == no_return_value_inernal)
             message = "ERROR (no return value) : "; // Node_Token* r
         else if (t == unbound_test_condition)
-            message = "ERROR (unbound test condition) : "; // Node_Token* r
+            message = "ERROR (unbound test-condition) : "; // Node_Token* r
         else if (t == unbound_condition)
             message = "ERROR (unbound condition) : "; // Node_Token* r
         else if (t == division_by_zero)
@@ -501,6 +501,7 @@ class SyntaxAnalyzer {
 private:
     AST_Tree tree;
     Node_Token *root;
+    bool first_layer_dot;
     
     // int currnt_level = 0;
     
@@ -530,30 +531,68 @@ private:
             return true;
         return false;
     }
+    // void renew_dot_appear(TokenType t, Token p) {
+    //     if (t == DOT) {
+    //         for (int i = dot_appear.size()-1; i >= 0; i--) {
+    //             if (compare_token(dot_appear.at(i).first, p)) {
+    //                 dot_appear.at(i).second = true;
+    //                 break;
+    //             }
+    //         }
+    //     }
+    //     else if (t == Left_PAREN)
+    //         dot_appear.push_back({p, false});
+    // }
+
+    // bool check_dot_appear(Token p) {
+    //     int size = dot_appear.size();
+    //     for (auto &dot : dot_appear) {
+    //         if (compare_token(dot.first, p)) {
+    //             // cerr << "dot.first.value: " << dot.first.value << endl;
+    //             return dot.second;
+    //         }
+    //     }
+    //     return false;
+    // }
+    
+
     void renew_dot_appear(TokenType t, Token p) {
+        // cerr << "\033[1;36m[DEBUG] renew_dot_appear called with TokenType: " << t << ", Token value: " << p.value << ", level: " << p.level << "\033[0m" << endl;
         if (t == DOT) {
+            // cerr << "\033[1;36m[DEBUG] renew_dot_appear: t is DOT. Iterating dot_appear.\033[0m" << endl;
             for (int i = dot_appear.size()-1; i >= 0; i--) {
+                // cerr << "\033[1;36m[DEBUG] renew_dot_appear: Checking dot_appear.at(" << i << ").first.value: " << dot_appear.at(i).first.value << ", level: " << dot_appear.at(i).first.level << "\033[0m" << endl;
                 if (compare_token(dot_appear.at(i).first, p)) {
                     dot_appear.at(i).second = true;
+                    // cerr << "\033[1;36m[DEBUG] renew_dot_appear: Matched. dot_appear.at(" << i << ").second set to true.\033[0m" << endl;
                     break;
                 }
             }
         }
-        else if (t == Left_PAREN)
+        else if (t == Left_PAREN) {
             dot_appear.push_back({p, false});
+            // cerr << "\033[1;36m[DEBUG] renew_dot_appear: t is Left_PAREN. Pushed token to dot_appear. New size: " << dot_appear.size() << "\033[0m" << endl;
+        }
+
+        // cerr << "\033[1;36m[DEBUG] renew_dot_appear: dot_appear size after operation: " << dot_appear.size() << "\033[0m" << endl;
     }
 
     bool check_dot_appear(Token p) {
+        // cerr << "\033[1;35m[DEBUG] check_dot_appear called with Token value: " << p.value << ", level: " << p.level << "\033[0m" << endl;
         int size = dot_appear.size();
+        // cerr << "\033[1;35m[DEBUG] check_dot_appear: dot_appear size: " << size << "\033[0m" << endl;
         for (auto &dot : dot_appear) {
+            // cerr << "\033[1;35m[DEBUG] check_dot_appear: Checking dot.first.value: " << dot.first.value << ", level: " << dot.first.level << "\033[0m" << endl;
             if (compare_token(dot.first, p)) {
+                // cerr << "\033[1;35m[DEBUG] check_dot_appear: Matched. Returning dot.second: " << dot.second << "\033[0m" << endl;
                 // cerr << "dot.first.value: " << dot.first.value << endl;
                 return dot.second;
             }
         }
+        // cerr << "\033[1;35m[DEBUG] check_dot_appear: No match found. Returning false.\033[0m" << endl;
         return false;
     }
-    
+
     void print_space(int n) {
         for (int i = 0; i < 2*n; i++)
             cout << " ";
@@ -739,13 +778,16 @@ public:
         // cerr << "str: " << str << endl;
         double float_value = stod(str);
         // cerr << "float_value: " << float_value << endl;
-        str = to_string(round(float_value * 1000.0) / 1000.0);
+        float_value = round(float_value * 1000.0) / 1000.0; // 四捨五入到小數點後第三位
+        char buf[64];
+        snprintf(buf, sizeof(buf), "%.3f", float_value);
+        str = buf;
         // cerr << "str: " << str << endl;
 
         // 小數點後大於三位數, 只取到小數點後第三位
-        int dot_pos = str.find('.');
-        if (str.size() - dot_pos > 4)
-            str = str.substr(0, dot_pos + 4);
+        // int dot_pos = str.find('.');
+        // if (str.size() - dot_pos > 4)
+        //     str = str.substr(0, dot_pos + 4);
 
         if (sign == "-")
             str = sign + str;
@@ -764,7 +806,7 @@ public:
         int token_size = tokenBuffer.size();
 
         // cerr << "\033[1;34menter check_syntax\033[0m" << endl;
-        // cerr << "tokenBuffer.size(): " << tokenBuffer.size() << endl;
+        // cerr << "start: " << error << endl;
         if (tokenBuffer.size() == 1) {
             // cerr << "tokenBuffer.size() == 1" << endl;
             // . 
@@ -773,7 +815,7 @@ public:
                 error = UNEXPECTED_TOKEN;
             }
             
-            
+            renew_dot_appear(tokenBuffer.at(0).type, tokenBuffer.at(0));
         }
         else if (token_size > 1) {
             // cerr << "token_size > 1" << endl;
@@ -798,6 +840,7 @@ public:
                         if (check_dot_appear(tokenBuffer.at(i))) {
                             // cerr << "\033[1;31mcheck_dot_appear == true\033[0m" << endl;
                             // cerr << "check_dot_appear: " << tokenBuffer.at(i).value << endl;
+                            cerr << "\033[1;31m[DEBUG] Multiple DOTs detected for LPAREN at line " << tokenBuffer.at(i).line << ", col " << tokenBuffer.at(i).column << "\033[0m" << endl;
                             error = UNEXPECTED_END_PAREN;
                         }
                         else //if(tokenBuffer.at(index_curr).type == DOT) {
@@ -843,11 +886,11 @@ public:
                     }
                 }
             }
+            // cerr << "end: " << error << endl;
 
             renew_dot_appear(tokenBuffer.at(index_curr).type, tokenBuffer.at(index_curr));
         }
 
-        // cerr << "\033[1;34mend check_syntax\033[0m" << endl;
     }
 
     void build_tree(vector<Token> &v, bool check = true) {
@@ -966,7 +1009,7 @@ private:
             if (i == 0 && (str.at(0) == '+' || str.at(0) == '-')) {
                 if (str.at(0) == '+')
                     tmp = str.substr(1); // Remove the '+' sign from the string
-                cerr << "int str tmp: " << tmp << endl;
+                // cerr << "int str tmp: " << tmp << endl;
                 
                 i++;
                 continue;
@@ -1279,8 +1322,8 @@ public:
                     c_peek = getchar(); // read the next char
                     ungetc(c_peek, stdin);
                     finish_input = true;
-                    cerr << "\033[1;31mUNEXPECTED_EOF  str: " << str << "\033[0m" << endl;
-                    cerr << error << endl;
+                    // cerr << "\033[1;31mUNEXPECTED_EOF  str: " << str << "\033[0m" << endl;
+                    // cerr << error << endl;
                     set_token_line_and_column(tmptoken, line, column-str.size(), str);
                     return str;
                 }
@@ -1457,7 +1500,6 @@ public:
                 }
 
                 // turn () to nil
-                bool ok = true;
                 if (tokenBuffer.size() >= 2) {
                     if (tokenBuffer.at(tokenBuffer.size()-2).type == Left_PAREN && tokenBuffer.at(tokenBuffer.size()-1).type == Right_PAREN) {
                         Token nil_token;
@@ -2612,9 +2654,13 @@ class FunctionExecutor {
                     }
                 }
                 catch (Error err) {
-                    if (e == no_return_value) {
-                        e = unbound_condition; // unbound condition
-                        throw Error(unbound_condition, instr, "unbound condition", 0, 0, err.root);
+                    if (instr == "not" && e == no_return_value) {
+                        e = unbound_parameter;
+                        throw Error(unbound_parameter, instr, "unbound_parameter", 0, 0, err.root);
+                    }
+                    else if (e == no_return_value) {
+                        e = unbound_condition;
+                        throw Error(unbound_condition, instr, "unbound_condition", 0, 0, err.root);
                     }
                     else
                         throw err;
@@ -3872,21 +3918,14 @@ int main() {
             Lexical.Get_Token(finish_input, E);
 
             if (finish_input) {
-                // cerr << "\033[1;32mfinish_input\033[0m" << endl;
                 // bulid parser tree
-                // cerr << "\033[1;34menter build_tree\033[0m" << endl;
                 Syntax.build_tree(Lexical.tokenBuffer);
                 Syntax.set_root();
-                // cerr << "\033[1;34mend build_tree\033[0m" << endl;
                 // Syntax.print(); // !Debug
 
-                // cerr << "\033[1;34menter execute\033[0m" << endl;
                 FunctionExecutor func_executor;
-                // Node_Token* result = nullptr;
                 unordered_map<string, Node_Token*> local_defined_table;
                 Node_Token* result = func_executor.evalution(Syntax.get_root(), E, local_defined_table);
-
-                // cerr << "\033[1;34mend execute\033[0m" << endl;
 
                 Syntax.print(result);
                 cout << endl; // Print the result of the evaluation
@@ -3949,7 +3988,7 @@ int main() {
                     break;
                 case unbound_symbol:
                     cerr << "\033[1;31m" << "unbound_symbol" << "\033[0m" << endl;
-                    cerr << e.expected << endl;
+                    // cerr << e.expected << endl;
                     cout << e.message << endl;
                     Lexical.reset();
                     break;
