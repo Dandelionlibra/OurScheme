@@ -2144,12 +2144,8 @@ class FunctionExecutor {
 
             while (left_node != nullptr && left_node->token.type != NIL) {
                 if (left_node->left->token.type != SYMBOL) {
-                    if (left_node->left->token.type == DOT)
-                        left_node->left = evalution(left_node->left, e, local_defined_table);
-                    else {
-                        e = error_define_format;
-                        throw Error(error_define_format, "LAMBDA", "error_define_format", 0, 0, cur);
-                    }
+                    e = error_define_format;
+                    throw Error(error_define_format, "LAMBDA", "error_define_format", 0, 0, cur);
                 }
                 // 排除保留字
                 else if (is_reserved_word(left_node->left->token.value)) {
