@@ -1,0 +1,175 @@
+Welcome to OurScheme!
+
+> apply-twice defined
+
+> ERROR (unbound parameter) : ( f
+  x
+)
+
+> ERROR (no return value) : ( let
+  ( ( inc-or-nil
+      ( lambda
+        ( x
+        )
+        ( cond
+          ( ( <
+              5
+              3
+            )
+            4
+          )
+        )
+      )
+    )
+  )
+  ( ( lambda
+      ( h
+      )
+      ( h
+        7
+      )
+    )
+    inc-or-nil
+  )
+)
+
+> apply-twice defined
+
+> ERROR (unbound parameter) : ( f
+  x
+)
+
+> apply-f defined
+
+> ERROR (no return value) : ( apply-f
+  ( lambda
+    ( y
+    )
+    ( cond
+      ( ( <
+          5
+          3
+        )
+        4
+      )
+    )
+  )
+  1
+)
+
+> ERROR (COND format) : ( cond
+  nil
+  1
+)
+
+> apply-twice defined
+
+> ERROR (COND format) : ( cond
+  nil
+)
+
+> apply-f defined
+
+> ERROR (COND format) : ( cond
+  nil
+  1
+)
+
+> ERROR (no return value) : ( let
+  ( ( inc-or-nil
+      ( lambda
+        ( x
+        )
+        ( if
+          nil
+          1
+        )
+      )
+    )
+  )
+  ( ( lambda
+      ( h
+      )
+      ( h
+        7
+      )
+    )
+    inc-or-nil
+  )
+)
+
+> apply-twice defined
+
+> ERROR (incorrect number of arguments) : if
+
+> apply-f defined
+
+> ERROR (no return value) : ( apply-f
+  ( lambda
+    ( y
+    )
+    ( if
+      nil
+      1
+    )
+  )
+  1
+)
+
+> ERROR (no return value) : ( let
+  ( ( inc-or-nil
+      ( lambda
+        ( x
+        )
+        ( if
+          nil
+          1
+        )
+      )
+    )
+  )
+  ( ( lambda
+      ( h
+      )
+      ( h
+        7
+      )
+    )
+    inc-or-nil
+  )
+)
+
+> apply-f defined
+
+> ERROR (no return value) : ( apply-f
+  ( lambda
+    ( y
+    )
+    ( if
+      nil
+      1
+    )
+  )
+  1
+)
+
+> ERROR (attempt to apply non-function) : 4
+
+> ERROR (no return value) : ( apply-f
+  ( lambda
+    ( y
+    )
+    ( if
+      nil
+      1
+    )
+  )
+  1
+)
+
+> foo defined
+
+> ERROR (unexpected token) : atom or '(' expected when token at Line 2 Column 1 is >>)<<
+
+> ERROR (no more input) : END-OF-FILE encountered
+Thanks for using OurScheme!

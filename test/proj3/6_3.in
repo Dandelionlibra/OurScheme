@@ -1,0 +1,50 @@
+1
+(define (apply-twice f x) (f (f x)))
+(apply-twice (lambda (z) (if #f 1)) 1)
+
+(let ((inc-or-nil (lambda (x) (cond ((< 5 3) 4)  )      )))
+  ((lambda (h) (h 7)) inc-or-nil))
+
+(define (apply-twice f x) (f (f x)))
+(apply-twice (lambda (z)  (cond ((< 5 3) 4)  ) ) 1)
+
+(define (apply-f f x) (f x))
+(apply-f (lambda (y)  (cond ((< 5 3) 4)  )) 1)
+
+(let ((inc-or-nil (lambda (x) (cond #f 1))))
+  ((lambda (h) (h 7)) inc-or-nil))
+
+(define (apply-twice f x) (f (f x)))
+(apply-twice (lambda (z) (cond #f)) 1)
+
+(define (apply-f f x) (f x))
+(apply-f (lambda (y) (cond #f 1)) 1)
+
+
+
+(let ((inc-or-nil (lambda (x) (if #f 1))))
+  ((lambda (h) (h 7)) inc-or-nil))
+
+(define (apply-twice f x) (f (f x)))
+(apply-twice (lambda (z) (if #f)) 1)
+
+(define (apply-f f x) (f x))
+(apply-f (lambda (y) (if #f 1)) 1)
+
+(let ((inc-or-nil (lambda (x) (if #f 1))))
+  ((lambda (h) (h 7)) inc-or-nil))
+
+
+(define (apply-f f x) (f x))
+(apply-f (lambda (y) (if #f 1)) 1)
+(apply-f 4 1)
+(apply-f (lambda (y) (if #f 1)) 1 )
+
+
+(define (foo n)
+  (cond (
+     (if #f 1) 1 (foo (- n 1))
+  ) )
+)
+
+) ;
